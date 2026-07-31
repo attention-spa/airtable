@@ -1,10 +1,18 @@
 import type {
   ResolvedSmartBaseConfig,
+  ResolvedUpdateFieldsConfig,
   SmartBaseConfig,
+  UpdateFieldsConfig,
 } from "./types.ts";
 
 const DEFAULT_RECORDS_PER_MUTATION = 50;
 const DEFAULT_MUTATIONS_PER_SECOND = 5;
+
+const DEFAULT_UPDATE_FIELDS_CONFIG: ResolvedUpdateFieldsConfig = {
+  enableSelectFieldChoiceDeletion: false,
+  skipUnchanged: true,
+  unsupportedOptions: "throw",
+};
 
 function assertIntegerInRange(
   name: string,
@@ -40,5 +48,20 @@ export function resolveSmartBaseConfig(
   return {
     recordsPerMutation,
     mutationsPerSecond,
+  };
+}
+
+export function resolveUpdateFieldsConfig(
+  config: UpdateFieldsConfig = {},
+): ResolvedUpdateFieldsConfig {
+  return {
+    enableSelectFieldChoiceDeletion:
+      config.enableSelectFieldChoiceDeletion ??
+      DEFAULT_UPDATE_FIELDS_CONFIG.enableSelectFieldChoiceDeletion,
+    skipUnchanged:
+      config.skipUnchanged ?? DEFAULT_UPDATE_FIELDS_CONFIG.skipUnchanged,
+    unsupportedOptions:
+      config.unsupportedOptions ??
+      DEFAULT_UPDATE_FIELDS_CONFIG.unsupportedOptions,
   };
 }

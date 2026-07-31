@@ -1,1 +1,1 @@
-export { SmartBase } from "./lib/class.ts";
+export * from "./lib/class.ts";

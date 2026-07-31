@@ -60,19 +60,18 @@ export class MutationLimiter {
         const mutations = this.#queue.splice(0, this.#mutationsPerSecond);
         this.#nextWindowAt = Date.now() + WINDOW_MS;
 
-        const results = await Promise.allSettled(
-          mutations.map((mutation) => mutation.run()),
-        );
-
-        results.forEach((result, index) => {
-          const mutation = mutations[index];
-
-          if (result.status === "fulfilled") {
-            mutation.resolve(result.value);
-          } else {
-            mutation.reject(result.reason);
+        const executions = mutations.map(async (mutation) => {
+          try {
+            const value = await mutation.run();
+            mutation.resolve(value);
+          } catch (error) {
+            mutation.reject(error);
           }
         });
+
+        // Wait for the complete window before starting the next one, while
+        // settling each queued promise as soon as its own mutation finishes.
+        await Promise.allSettled(executions);
       }
     } finally {
       this.#running = false;

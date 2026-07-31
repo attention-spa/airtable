@@ -23,9 +23,9 @@ function isPromiseLike<T = unknown>(value: unknown): value is PromiseLike<T> {
 }
 
 export function createBaseProxy(
-  base: Base,
+  base: AirtableBase,
   wrapTable: (table: AirtableTable) => SmartTable,
-): Base {
+): AirtableBase {
   const methodCache = new Map<PropertyKey, Function>();
 
   const wrapPossibleTables = (value: unknown): unknown => {
@@ -34,7 +34,7 @@ export function createBaseProxy(
     }
 
     if (Array.isArray(value)) {
-      return value?.map(wrapPossibleTables);
+      return value.map(wrapPossibleTables);
     }
 
     return value;
