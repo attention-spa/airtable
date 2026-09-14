@@ -56,7 +56,8 @@ jobs:
           rm -f .github/workflows/_retirement-import-airtable.yml
           git add -f legacy/airtable
           git add -A
-          imported_tree=$(git rev-parse ':legacy/airtable')
+          staged_root=$(git write-tree)
+          imported_tree=$(git ls-tree "$staged_root" legacy/airtable | awk '{print $3}')
           test "$imported_tree" = '8dd6704f0c50b0a461990f7370ed7fb52952cac7'
           git config user.name 'migration-helper[bot]'
           git config user.email 'migration-helper[bot]@users.noreply.github.com'
