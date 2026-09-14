@@ -54,6 +54,7 @@ jobs:
 
           rm -rf _migration-airtable
           rm -f .github/workflows/_retirement-import-airtable.yml
+          git add -f legacy/airtable
           git add -A
           imported_tree=$(git rev-parse ':legacy/airtable')
           test "$imported_tree" = '8dd6704f0c50b0a461990f7370ed7fb52952cac7'
