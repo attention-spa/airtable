@@ -1,0 +1,55 @@
+{
+    "compilerOptions": {
+        "module": "nodenext",
+        "target": "ESNext",
+        "types": [
+            "node"
+        ],
+        "sourceMap": true,
+        "skipDefaultLibCheck": true,
+        "skipLibCheck": true,
+        /**
+        "lib": [
+        "WebWorker",
+        "ESNext"
+        ],
+        */
+        "tsBuildInfoFile": ".build/tsbuildinfo",
+        /** Required for being able to import directory paths. */
+        "moduleResolution": "NodeNext",
+        "allowImportingTsExtensions": true,
+        "maxNodeModuleJsDepth": 7,
+        "moduleDetection": "auto",
+        "incremental": true,
+        "esModuleInterop": true,
+        "emitDeclarationOnly": true,
+        "composite": true,
+        "strict": false,
+        "resolveJsonModule": true,
+        "resolvePackageJsonImports": true,
+        "resolvePackageJsonExports": true,
+        "verbatimModuleSyntax": true,
+        "allowArbitraryExtensions": true,
+        "allowJs": true,
+        "checkJs": true,
+        "allowUnreachableCode": true,
+        "allowUmdGlobalAccess": true,
+        "noEmit": true,
+        "ignoreDeprecations": "6.0",
+        "removeComments": false,
+        "noEmitHelpers": false,
+    },
+    "typeAcquisition": {
+        "enable": true,
+    },
+    "include": [
+        "src"
+    ],
+    "exclude": [
+        "node_modules",
+        "scripts"
+    ],
+    "ts-node": {
+        "esm": true
+    }
+}

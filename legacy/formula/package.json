@@ -1,0 +1,30 @@
+{
+  "name": "formula",
+  "version": "0.0.2-dev.1",
+  "private": true,
+  "description": "Airtable formulas developed for and with [Mable Module Manager](https://github.com/dddominikk/mable_modules).",
+  "homepage": "https://github.com/dddominikk/formula#readme",
+  "bugs": {
+    "url": "https://github.com/dddominikk/formula/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dddominikk/formula.git"
+  },
+  "license": "MIT",
+  "author": "Dominik Bošnjak <bosnjakinimod@gmail.com>",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "@opengsd/gsd-core": "^1.5.0",
+    "@types/node": "^25.6.0",
+    "tsup": "^8.5.1"
+  },
+  "engines": {
+    "node": "=>25"
+  }
+}

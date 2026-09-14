@@ -1,0 +1,9 @@
+REGEX_REPLACE(
+    REGEX_REPLACE(
+        {Source},
+        '(?s)((?:\x60.*?[$][{][^}]*)?(?<b>\\bbase\\b)|(?<b0>((\x27([^\x27\x5ac\n]*(\x5c\x27|[^\x27\n])*)\x27)|(\x22([^\x22\x5c\n]*(\x5c\x22|[^\x22\n])*)\x22)|(`(?<bt1>[^`\x5c]*(\x5c`|[^`])*)`))|(\\b((?<co>console)|(?<cu>cursor)|(\s*([+]\s*(\x27{2}|\x22{2}|\x60{2})|([.]\s*toString\s*[(]\s*[)])))|(?<i>input)|(?<o>output)|(?<r>remoteFetchAsync)|(?<s>session)\\b))|.+?)+?)+',
+        '$<b>,$<co>,$<cu>,$<i>,$<o>,$<r>,$<s>'
+    ),
+    '^,+|,+$|(,)+',
+    '$1'
+)
