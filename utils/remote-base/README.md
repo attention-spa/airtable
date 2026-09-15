@@ -1,82 +1,90 @@
 # remote-base
 
-Dependency-free Airtable Web API client with lazy base/table linking and local record caching.
+Dependency-free Airtable Web API client for environments with standard `fetch`, `URLSearchParams`, `Proxy`, and ESNext support.
+
+`remote-base` is authored as native TypeScript ESM. Alternate bundle formats are build artifacts, not part of the source module layout.
 
 ## ESM
 
-```js
-import remoteBase from './utils/remote-base/index.js';
+```ts
+import remoteBase from './index.ts';
 
-remoteBase.auth = AIRTABLE_PAT;
+remoteBase.auth = AIRTABLE_TOKEN;
 
-const base = await remoteBase('appXXXXXXXXXXXXXX').link;
+const pending = remoteBase('appXXXXXXXXXXXXXX');
+const base = await pending.link;
+```
+
+Auth can also be supplied on the first call:
+
+```ts
+const base = await remoteBase(
+    'appXXXXXXXXXXXXXX',
+    { auth: AIRTABLE_TOKEN },
+).link;
+```
+
+Auth-only calls configure the shared client and return the callable:
+
+```ts
+const rb = remoteBase(AIRTABLE_TOKEN);
+const base = await rb('appXXXXXXXXXXXXXX');
+```
+
+## Lazy data
+
+```ts
 const records = await remoteBase('appXXXXXXXXXXXXXX').Tasks.records;
+const data = await remoteBase('appXXXXXXXXXXXXXX').data;
 ```
 
-The first successful link caches the concrete base object. Later calls for that base return the cached object synchronously:
+After a base links, subsequent base lookups return the cached base synchronously. Table data behaves the same way after it has loaded.
 
-```js
-const base = remoteBase('appXXXXXXXXXXXXXX');
-```
+`base.table` is the same array object as `base.tables`, decorated with non-enumerable getters and a case-insensitive `.get(ref)` lookup:
 
-Base IDs and table IDs can also be extracted from Airtable URL-like strings. Table lookup via `.get(ref)` is case-insensitive.
-
-```js
-const table = remoteBase(
-    'https://airtable.com/appXXXXXXXXXXXXXX/tblYYYYYYYYYYYYYY',
-);
-
-const records = await table.records;
-```
-
-`base.table` is the same array object as `base.tables`, decorated with lookup getters and `.get(ref)`:
-
-```js
+```ts
 base.table === base.tables;
 base.table.Tasks;
-base.table.tasks;
-base.table.tblYYYYYYYYYYYYYY;
-base.table.get('Tasks');
+base.table.tblXXXXXXXXXXXXXX;
+base.table.get('tasks');
 ```
 
-Linked bases also expose table getters directly:
+The linked base also receives table ID/name getters directly.
 
-```js
-base.Tasks;
-base.tasks;
-```
+## Mutations
 
-Authentication may be configured once by property assignment, config, or an initial call:
+Tables expose:
 
-```js
-remoteBase.auth = AIRTABLE_PAT;
-remoteBase.config = { auth: AIRTABLE_PAT };
-remoteBase.config({ app: BASE_ID, auth: AIRTABLE_PAT });
-remoteBase(AIRTABLE_PAT)(BASE_ID);
-remoteBase(BASE_ID, { auth: AIRTABLE_PAT });
-```
+- `fetchFullRecords()`
+- `upsertRecords()`
+- `deleteRecords()`
 
-Use `.data` or `fetchFullData()` to hydrate all table records:
+The base exposes `update()` for mixed table mutations and `fetchFullData()` for loading all records in all tables.
 
-```js
-await remoteBase(BASE_ID).data;
-```
+Id-less upserts use Airtable `performUpsert`; the primary field is the default merge key unless `fieldsToMergeOn` is supplied.
 
-## Standalone IIFE
+## Optional bundles
 
-`iife.js` is generated from `factory.js` and has no imports or exports. Evaluating it returns an isolated `remoteBase` callable, which is useful in Airtable Automation scripts where dynamic awaited imports are unavailable:
+Bundling is owned by the repository root, not this utility.
 
-```js
-const source = await fetch(RAW_IIFE_URL).then(response => response.text());
-const remoteBase = eval(source);
-
-remoteBase.auth = AIRTABLE_PAT;
-
-const base = await remoteBase(BASE_ID).data;
-```
-
-Regenerate the standalone file after changing `factory.js`:
+Default ESM bundle:
 
 ```sh
-node utils/remote-base/build-iife.mjs
+npm run bundle
 ```
+
+This produces `dist/bundle.mjs` from `utils/index.ts`.
+
+A remote-base-only bundle can be requested explicitly:
+
+```sh
+npm run bundle -- utils/remote-base/index.ts
+```
+
+For environments that cannot consume ESM, request another `tsup` format rather than maintaining a second source implementation:
+
+```sh
+npm run bundle -- utils/remote-base/index.ts --format iife --global-name remoteBaseModule
+```
+
+That path is intended for cases such as fetching bundle source as text and evaluating it inside an Airtable Automation script. The ESM source remains canonical.
