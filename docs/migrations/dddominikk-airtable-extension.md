@@ -65,7 +65,7 @@ Already merged historically into the source and reflected by the audited reposit
 
 ### Source PR #3 — Dependabot `cross-spawn` update
 
-Dependency-only maintenance for the obsolete legacy toolchain. It should be closed as obsolete rather than migrated.
+Dependency-only maintenance for the obsolete legacy toolchain. It was closed as obsolete rather than migrated.
 
 ## Retirement gate
 
@@ -75,5 +75,20 @@ The source repository is retirement-ready when:
 2. source issue #2 is closed with a pointer to this preserved branch context;
 3. source Dependabot PR #3 is closed as obsolete;
 4. final source readback confirms no other branch, issue, PR, release, tag, or workflow contains unaccounted useful state.
+
+## Final retirement audit — 2026-09-15
+
+All repository-retirement gates are satisfied.
+
+- Target PR #8 was squash-merged as `b1a0e21954f11da1f8433bd465fa6bd6df044f91` and closed `attention-spa/airtable#7`.
+- Target review confirmed the credential-shaped literal from the unsafe source scratch file did **not** cross into the target migration.
+- Source issue #2 is closed `not_planned` with a pointer to the preserved `scripting` implementation evidence.
+- Source Dependabot PR #3 is closed as obsolete. Its branch still exists as GitHub ref residue; the connected migration tooling cannot delete branch refs, and the branch contains only the already-dispositioned dependency update.
+- Source `main` remains the audited `ed28dfa25be0950a31dc0d07d178270eda8fe4f6` / tree `ec5fa12f8e32981c05f7fae415b1210af2f1e610`.
+- The surviving `scripting` branch is fully accounted for by the preserved `scripting-delta` material and source issue disposition.
+- There are no open source issues or pull requests, no repository-authored workflows, no releases, and no tags.
+- The target changes are confined to inert `legacy/airtable-extension/**` reference material plus this migration record; no active Airtable/formula runtime behavior was changed.
+
+**Status: `dddominikk/airtable-extension` is repository deletion-ready.** The remaining source branch refs do not contain unaccounted active work or required provenance.
 
 Source deletion is a separate maintainer action. No active target runtime depends on this legacy snapshot.
