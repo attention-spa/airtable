@@ -21,7 +21,7 @@
     "test": "tests"
   },
   "scripts": {
-    "esm-build": "tsup",
+    "esm-build": "npm --prefix ../.. run bundle -- legacy/airtable/src/index.ts",
     "test": "tsx --test tests/**/*.ts"
   },
   "devDependencies": {
