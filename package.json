@@ -13,7 +13,7 @@
         "email": "dominik@attention-spa.com"
     },
     "scripts": {
-        "bundle": "node bundle.mjs",
+        "bundle": "npx --yes tsup@8.5.1",
         "lint": "eslint \"src/**/*.ts\" \".github/**/*.ts\"",
         "lint:watch": "chokidar \"src/**/*.ts\" \".github/**/*.ts\" -c \"npm run lint\""
     },
@@ -27,7 +27,6 @@
         "eslint-plugin-prettier": "^5.5.5",
         "globals": "^17.3.0",
         "jiti": "^2.6.1",
-        "tsup": "^8.5.1",
         "typescript": "^5.9.3",
         "typescript-eslint": "^8.36.0",
         "vitest": "^4.0.18"
