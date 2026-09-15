@@ -1,0 +1,63 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "jsx": "preserve",
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "./build/dist",
+    "strictNullChecks": false,
+    "strict": false,
+    "sourceMap": false,
+    "pretty": true,
+    "allowJs": true,
+    "removeComments": false,
+    "skipDefaultLibCheck": true,
+    "skipLibCheck": true,
+    "lib": ["ESNext", "WebWorker", "WebWorker.ImportScripts"],
+    "allowUnreachableCode": true,
+    "noUnusedLocals": true,
+    "resolveJsonModule": true,
+    "noEmit": false,
+    "types": [
+      "@airtable/blocks",
+      "react",
+      "react-dom",
+      "@types/node",
+      "@types/react",
+      "@types/react-dom"
+    ],
+
+    "esModuleInterop": true
+  },
+  "include": ["src/**/*"],
+  "ts-node": {
+    "transpileOnly": true,
+    "compilerOptions": {
+      "module": "ESNext"
+    }
+  },
+  "rootDirs": ["src", "scripts"],
+  "exclude": [
+    "node_modules",
+    "build",
+    ".tmp",
+    ".eslintrc.js",
+    "package-lock.json",
+    "package.json"
+  ],
+  "typeAcquisition": {
+    "enable": true,
+    "include": ["@airtable/blocks", "react", "react-dom", "./src/**/*"]
+  },
+  "compileOnSave": true,
+  "watchOptions": {
+    "watchFile": "useFsEvents"
+  },
+  "buildOptions": {
+    "outDir": "./build/dist",
+    "baseUrl": "./src",
+    "dry": true
+  }
+}
