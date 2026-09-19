@@ -13,15 +13,13 @@
         "email": "dominik@attention-spa.com"
     },
     "scripts": {
-        "bundle": "npx --yes tsup@8.5.1",
+        "bundle": "npx --yes --package=typescript@5.9.3 --package=tsup@8.5.1 tsup",
         "lint": "eslint \"src/**/*.ts\" \".github/**/*.ts\"",
         "lint:watch": "chokidar \"src/**/*.ts\" \".github/**/*.ts\" -c \"npm run lint\""
     },
     "devDependencies": {
         "@eslint/js": "^10.0.1",
         "@types/node": "^25.3.0",
-        "@typescript-eslint/eslint-plugin": "^7.0.0",
-        "@typescript-eslint/parser": "^6.15.0",
         "airtable-ts": "^1.10.0",
         "eslint": "^10.0.1",
         "eslint-plugin-prettier": "^5.5.5",
