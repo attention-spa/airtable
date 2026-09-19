@@ -47,7 +47,9 @@ The `bases` selector defaults to `'all'`:
 - `'all'` and `'*'` list every base accessible to the PAT without fetching table schemas.
 - `'all*'` and `'**'` list every accessible base and load each base's table schema.
 - A bare base ID such as `'appXXXXXXXXXXXXXX'` fetches base metadata only.
-- A suffixed base ID such as `'appXXXXXXXXXXXXXX*'` loads that base and its table schema.
+- A single-star base ID such as `'appXXXXXXXXXXXXXX*'` loads that base and its table schema.
+- A double-star base ID such as `'appXXXXXXXXXXXXXX**'` loads the base schema and all records.
+- Array selectors may use `'all'`, `'all*'`, or `'all**'` as a fallback for all accessible bases at metadata, schema, or full-data level respectively.
 - Object selectors default to `schema: true` and allow record preloading.
 
 ```ts
@@ -87,7 +89,32 @@ await remoteBase.init({
 });
 ```
 
-Duplicate base selectors are merged. The strongest request wins: schema loading is preserved, `fullData`/`allRecords` wins over partial record loading, and requested record IDs are de-duplicated.
+Duplicate base selectors are merged. The strongest request wins: full-record loading overrides schema-only loading, which overrides metadata-only loading. Partial `records` requests are preserved unless the same base is promoted to a full-data load.
+
+String selectors can also match bases by regular expression. The wrapper identifies which Airtable base metadata field to test; the inner expression is compiled as a case-insensitive JavaScript `RegExp`:
+
+```ts
+const allInit = await remoteBase.init({
+    auth: AIRTABLE_TOKEN,
+    bases: [
+        'appr6R1eRXUU29BXC*',
+        'app9FSIYtBwYq6A0C**',
+        '(?<name_regex>.*reddit.*)',
+        '(?<name_regex>.*formul.*)*',
+        '(?<name_regex>.*freelance.*)**',
+        '(?<id_regex>app9FS.*)',
+        '(?<regex>^.+ap.*)',
+        'all',
+    ],
+});
+```
+
+- `(?<name_regex>...)` tests the base name.
+- `(?<id_regex>...)` tests the base ID.
+- `(?<regex>...)` tests both name and ID.
+- No suffix means metadata only, `*` means schema, and `**` means schema plus all records.
+- Selectors are evaluated in array order for result ordering, but repeated matches are merged by load strength. A later `'all'` therefore fills in unmatched bases without downgrading bases already selected for schema or full-data loading.
+- A regex selector that matches no bases is allowed and contributes nothing to the result.
 
 ## Lazy data
 

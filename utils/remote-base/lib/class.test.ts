@@ -215,4 +215,135 @@ describe('remoteBase.init', () => {
         expect(base.table.get(TABLE_ID)?.record(RECORD_ID)?.name).toBe('Alpha');
         expect(fetchMock).toHaveBeenCalledTimes(3);
     });
+
+
+    it('supports regex selectors, ** full-data loads, all fallback, and strongest-match priority', async () => {
+        const schemaBase = 'appr6R1eRXUU29BXC';
+        const fullBase = 'app9FSIYtBwYq6A0C';
+        const redditBase = 'appReddit00000000';
+        const formulaBase = 'appFormula0000000';
+        const freelanceBase = 'appFreelance00000';
+        const overlapBase = 'appOverlap0000000';
+        const mapBase = 'appMaps0000000000';
+        const idRegexBase = 'app9FSOther000000';
+        const otherBase = 'appOther000000000';
+
+        const available = [
+            { id: schemaBase, name: 'Release Catalog' },
+            { id: fullBase, name: 'GitHub DevOps' },
+            { id: otherBase, name: 'Other Base' },
+            { id: mapBase, name: 'Maps Archive' },
+            { id: idRegexBase, name: 'ID Regex Only' },
+            { id: redditBase, name: 'Reddit Watch' },
+            { id: formulaBase, name: 'Formula Lab' },
+            { id: freelanceBase, name: 'Freelance Jobs' },
+            { id: overlapBase, name: 'Reddit Formula Freelance' },
+        ];
+
+        const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+            const url = String(input);
+
+            if (url.endsWith('/meta/bases')) {
+                return jsonResponse({ bases: available });
+            }
+
+            const tableMatch = url.match(/\/meta\/bases\/(app\w{14})\/tables$/);
+            if (tableMatch) {
+                return jsonResponse({ tables: [tableSchema] });
+            }
+
+            const recordsMatch = url.match(
+                new RegExp(`/(app\\w{14})/${TABLE_ID}\\?`)
+            );
+            if (recordsMatch) {
+                return jsonResponse({
+                    records: [{
+                        id: RECORD_ID,
+                        fields: {
+                            fldName000000001: `record-for-${recordsMatch[1]}`,
+                        },
+                    }],
+                });
+            }
+
+            throw new Error(`Unexpected request: ${url}`);
+        });
+
+        vi.stubGlobal('fetch', fetchMock);
+
+        const remoteBase = createRemoteBase();
+        const result = await remoteBase.init({
+            auth: AUTH,
+            bases: [
+                `${schemaBase}*`,
+                `${fullBase}**`,
+                '(?<name_regex>.*reddit.*)',
+                '(?<name_regex>.*formul.*)*',
+                '(?<name_regex>.*freelance.*)**',
+                '(?<id_regex>app9FS.*)',
+                '(?<regex>^.+ap.*)',
+                'all',
+            ],
+        });
+
+        const byId = new Map(result.map(base => [base.id, base]));
+
+        expect(byId.size).toBe(available.length);
+        expect(result.map(base => base.id)).toEqual([
+            schemaBase,
+            fullBase,
+            redditBase,
+            overlapBase,
+            formulaBase,
+            freelanceBase,
+            idRegexBase,
+            mapBase,
+            otherBase,
+        ]);
+
+        const hasSchema = (id: string) =>
+            Boolean((byId.get(id) as RemoteBase | undefined)?.table);
+        const hasRecord = (id: string) =>
+            Boolean(
+                (byId.get(id) as RemoteBase | undefined)
+                    ?.table
+                    ?.get(TABLE_ID)
+                    ?.record(RECORD_ID)
+            );
+
+        expect(hasSchema(schemaBase)).toBe(true);
+        expect(hasRecord(schemaBase)).toBe(false);
+
+        expect(hasSchema(fullBase)).toBe(true);
+        expect(hasRecord(fullBase)).toBe(true);
+
+        expect(hasSchema(redditBase)).toBe(false);
+        expect(hasRecord(redditBase)).toBe(false);
+
+        expect(hasSchema(formulaBase)).toBe(true);
+        expect(hasRecord(formulaBase)).toBe(false);
+
+        expect(hasSchema(freelanceBase)).toBe(true);
+        expect(hasRecord(freelanceBase)).toBe(true);
+
+        expect(hasSchema(overlapBase)).toBe(true);
+        expect(hasRecord(overlapBase)).toBe(true);
+
+        expect(hasSchema(idRegexBase)).toBe(false);
+        expect(hasSchema(mapBase)).toBe(false);
+        expect(hasSchema(otherBase)).toBe(false);
+
+        const urls = fetchMock.mock.calls.map(([input]) => String(input));
+        const schemaLoads = (id: string) =>
+            urls.filter(url => url.includes(`/meta/bases/${id}/tables`)).length;
+        const recordLoads = (id: string) =>
+            urls.filter(url => url.includes(`/${id}/${TABLE_ID}?`)).length;
+
+        expect(schemaLoads(overlapBase)).toBe(1);
+        expect(recordLoads(overlapBase)).toBe(1);
+        expect(recordLoads(fullBase)).toBe(1);
+        expect(recordLoads(freelanceBase)).toBe(1);
+        expect(recordLoads(formulaBase)).toBe(0);
+        expect(recordLoads(redditBase)).toBe(0);
+    });
 });
