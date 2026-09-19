@@ -54,18 +54,18 @@ The `bases` selector defaults to `'all'`:
 const bases = await remoteBase.init({
     auth: AIRTABLE_TOKEN,
     bases: [
-        'appMetadataOnly00',
-        'appWithSchema0000*',
+        'appAAAAAAAAAAAAAA',
+        'appBBBBBBBBBBBBBB*',
         {
-            id: 'appSelected000000',
+            id: 'appCCCCCCCCCCCCCC',
             schema: true,
             records: [
-                'recFirst00000000',
-                'recSecond0000000',
+                'recAAAAAAAAAAAAAA',
+                'recBBBBBBBBBBBBBB',
             ],
         },
         {
-            id: 'appEverything00000',
+            id: 'appDDDDDDDDDDDDDD',
             allRecords: true,
         },
     ],
