@@ -92,16 +92,27 @@ await base.fetchFullData({
 });
 ```
 
-`followRecordLinks: true` resolves linked-record cell arrays lazily. The raw Airtable record IDs remain stored once internally; the public cell property becomes a getter whose array contents resolve to the exact cached records in the linked table:
+`followRecordLinks: true` resolves linked-record cell arrays lazily. The raw Airtable record IDs remain stored once internally; the public cell property becomes a getter whose array entries are lightweight, finite references:
 
 ```ts
 const task = base.Tasks.record('recXXXXXXXXXXXXXX');
+const assignee = task.fields.Assignees[0];
 
-task.fields.Assignees[0] ===
-    base.People.record('recYYYYYYYYYYYYYY');
+assignee.id;     // 'recYYYYYYYYYYYYYY'
+assignee.record; // exact cached record from the linked table
+
+assignee.record ===
+    base.People.record(assignee.id);
 ```
 
-No linked record objects are copied into the source record. Setting `followRecordLinks: false` exposes the original record-ID arrays again.
+Each linked reference exposes only `id` as an enumerable property. Its `record` property is a non-enumerable getter, so logging or serializing a fully walked base does not recursively expand the linked-record graph:
+
+```ts
+JSON.stringify(task.fields.Assignees);
+// [{"id":"recYYYYYYYYYYYYYY"}]
+```
+
+No linked record objects are copied into the source record, and the reference `id` itself is getter-backed from the original raw ID array rather than stored a second time. Setting `followRecordLinks: false` exposes the original record-ID arrays again.
 
 When `hiddenMetadataKey` is `'meta'` or `true`, supported objects receive a non-enumerable `meta` property:
 

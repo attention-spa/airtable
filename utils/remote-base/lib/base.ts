@@ -9,6 +9,7 @@ import type {
     RemoteFieldSchema,
     RemoteFullDataOptions,
     RemoteHiddenMetadataType,
+    RemoteLinkedRecordRef,
     RemoteRecord,
     RemoteTable,
     RemoteTableRegistry,
@@ -161,6 +162,8 @@ function installLinkedValueGetter(
 
     defineHiddenMetadata(raw, metadataKey, 'cellValue', () => field);
 
+    const refs = new Map<string, RemoteLinkedRecordRef>();
+
     const linkedRecords = new Proxy(raw, {
         get(target, property, receiver) {
             if (
@@ -168,9 +171,40 @@ function installLinkedValueGetter(
                 /^(?:0|[1-9]\d*)$/.test(property)
             ) {
                 const recordId = Reflect.get(target, property, receiver);
-                return typeof recordId === 'string'
-                    ? targetTable.record(recordId)
-                    : recordId;
+
+                if (typeof recordId !== 'string') {
+                    return recordId;
+                }
+
+                let ref = refs.get(property);
+
+                if (!ref) {
+                    ref = {} as RemoteLinkedRecordRef;
+
+                    Object.defineProperties(ref, {
+                        id: {
+                            enumerable: true,
+                            configurable: false,
+                            get: () => {
+                                const value = Reflect.get(target, property, receiver);
+                                return typeof value === 'string'
+                                    ? value
+                                    : String(value ?? '');
+                            },
+                        },
+                        record: {
+                            enumerable: false,
+                            configurable: false,
+                            get: () => targetTable.record(
+                                String(Reflect.get(target, property, receiver) ?? '')
+                            ),
+                        },
+                    });
+
+                    refs.set(property, ref);
+                }
+
+                return ref;
             }
 
             return Reflect.get(target, property, receiver);

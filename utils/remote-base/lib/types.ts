@@ -48,6 +48,11 @@ export type RemoteRecord = {
     fields: AirtableRecordFields;
 };
 
+export type RemoteLinkedRecordRef = {
+    readonly id: string;
+    readonly record: RemoteRecord | undefined;
+};
+
 export type RemoteFieldOptions = Record<string, unknown>;
 
 export type RemoteFieldSchema = {
