@@ -1,7 +1,7 @@
+import { MutationLimiter } from "../../core/limiter.ts";
 import { createBaseProxy } from "./base.ts";
 import { resolveSmartBaseConfig } from "./config.ts";
 import { smartBaseInstances } from "./instances.ts";
-import { MutationLimiter } from "./limiter.ts";
 import { createTableWrapper } from "./table.ts";
 import type {
   SmartBaseConfig,
