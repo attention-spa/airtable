@@ -258,7 +258,7 @@ export function createRemoteTable(
         ];
 
         for (const id of ids) {
-            if (!/^rec\\w{14}$/i.test(id)) {
+            if (!/^rec\w{14}$/i.test(id)) {
                 throw new TypeError(`Invalid Airtable record ID: ${id}`);
             }
         }
