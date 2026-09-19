@@ -15,5 +15,11 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npx tsc --pretty false
+      - name: Typecheck remote-base only
+        run: >-
+          npx tsc --noEmit --pretty false --strict --skipLibCheck
+          --target esnext --module nodenext --moduleResolution nodenext
+          --allowImportingTsExtensions --lib esnext,webworker
+          utils/remote-base/index.ts
+          utils/remote-base/lib/*.ts
       - run: npx vitest run utils/remote-base/lib/*.test.ts
