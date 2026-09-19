@@ -39,7 +39,7 @@ describe('remoteBase.init', () => {
     it('lists every accessible base for all and * without fetching schemas', async () => {
         const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
             const url = String(input);
-            expect(url).toContain('/meta/bases?');
+            expect(url).toMatch(/\/meta\/bases(?:\?offset=.*)?$/);
 
             return jsonResponse({
                 bases: [
@@ -65,7 +65,7 @@ describe('remoteBase.init', () => {
         const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
             const url = String(input);
 
-            if (url.includes('/meta/bases?')) {
+            if (url.endsWith('/meta/bases')) {
                 return jsonResponse({
                     bases: [{ id: BASE_ID, name: 'One' }],
                 });
@@ -93,12 +93,13 @@ describe('remoteBase.init', () => {
         const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
             const url = String(input);
 
-            if (url.endsWith(`/meta/bases/${BASE_ID}`)) {
-                return jsonResponse({ id: BASE_ID, name: 'One' });
-            }
-
-            if (url.endsWith(`/meta/bases/${OTHER_BASE_ID}`)) {
-                return jsonResponse({ id: OTHER_BASE_ID, name: 'Two' });
+            if (url.endsWith('/meta/bases')) {
+                return jsonResponse({
+                    bases: [
+                        { id: BASE_ID, name: 'One' },
+                        { id: OTHER_BASE_ID, name: 'Two' },
+                    ],
+                });
             }
 
             if (url.includes(`/meta/bases/${OTHER_BASE_ID}/tables`)) {
@@ -124,8 +125,10 @@ describe('remoteBase.init', () => {
         const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
             const url = String(input);
 
-            if (url.endsWith(`/meta/bases/${BASE_ID}`)) {
-                return jsonResponse({ id: BASE_ID, name: 'One' });
+            if (url.endsWith('/meta/bases')) {
+                return jsonResponse({
+                    bases: [{ id: BASE_ID, name: 'One' }],
+                });
             }
 
             if (url.includes(`/meta/bases/${BASE_ID}/tables`)) {
@@ -170,8 +173,10 @@ describe('remoteBase.init', () => {
         const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
             const url = String(input);
 
-            if (url.endsWith(`/meta/bases/${BASE_ID}`)) {
-                return jsonResponse({ id: BASE_ID, name: 'One' });
+            if (url.endsWith('/meta/bases')) {
+                return jsonResponse({
+                    bases: [{ id: BASE_ID, name: 'One' }],
+                });
             }
 
             if (url.includes(`/meta/bases/${BASE_ID}/tables`)) {
