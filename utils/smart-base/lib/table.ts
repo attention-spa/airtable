@@ -1,5 +1,6 @@
+import { chunk } from "../../core/batching.ts";
+import type { MutationLimiter } from "../../core/limiter.ts";
 import { resolveUpdateFieldsConfig } from "./config.ts";
-import type { MutationLimiter } from "./limiter.ts";
 import type {
   AirtableField,
   AirtableTable,
@@ -43,16 +44,6 @@ type PermissionAwareField = AirtableField & {
     options?: UpdateFieldOptionsInput,
   ) => PermissionCheckResult;
 };
-
-function chunk<T>(values: readonly T[], size: number): T[][] {
-  const chunks: T[][] = [];
-
-  for (let index = 0; index < values.length; index += size) {
-    chunks.push(values.slice(index, index + size));
-  }
-
-  return chunks;
-}
 
 function createField(
   table: AirtableTable,
