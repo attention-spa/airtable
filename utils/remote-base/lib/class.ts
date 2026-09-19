@@ -39,6 +39,10 @@ type NormalizedInitBase = {
 export function createRemoteBase(): RemoteBaseCallable {
     const states = new Map<string, RemoteBaseState>();
     let auth: string | undefined;
+    let baseListCache: {
+        auth: string;
+        bases: RemoteBaseSchema[];
+    } | null = null;
     const request = createRequest(() => auth);
 
     function link(
@@ -52,9 +56,7 @@ export function createRemoteBase(): RemoteBaseCallable {
             const [baseSchema, tableSchema] = await Promise.all([
                 knownSchema
                     ? Promise.resolve(knownSchema)
-                    : request<RemoteBaseSchema>(
-                        `/meta/bases/${encodeURIComponent(state.baseId)}`
-                    ),
+                    : resolveBaseMetadata(state.baseId),
                 request<TablesMetadataResponse>(
                     `/meta/bases/${encodeURIComponent(state.baseId)}/tables`
                 ),
@@ -238,23 +240,50 @@ export function createRemoteBase(): RemoteBaseCallable {
         return state.base ?? state.handle!;
     }
 
-    async function listBases(): Promise<RemoteBaseSchema[]> {
+    async function listBases(
+        refresh = false,
+    ): Promise<RemoteBaseSchema[]> {
+        if (
+            !refresh &&
+            auth &&
+            baseListCache?.auth === auth
+        ) {
+            return baseListCache.bases;
+        }
+
         const bases: RemoteBaseSchema[] = [];
         let offset: string | undefined;
 
         do {
-            const params = new URLSearchParams({ pageSize: '100' });
+            const params = new URLSearchParams();
             if (offset) params.set('offset', offset);
 
+            const suffix = params.size ? `?${params}` : '';
             const page = await request<BasesMetadataResponse>(
-                `/meta/bases?${params}`
+                `/meta/bases${suffix}`
             );
 
             bases.push(...page.bases);
             offset = page.offset;
         } while (offset);
 
+        if (auth) {
+            baseListCache = {
+                auth,
+                bases,
+            };
+        }
+
         return bases;
+    }
+
+    async function resolveBaseMetadata(
+        baseId: string,
+    ): Promise<RemoteBaseSchema> {
+        const bases = await listBases();
+        return bases.find(
+            base => normalizeRef(base.id) === normalizeRef(baseId)
+        ) ?? { id: baseId };
     }
 
     function parseBaseId(value: string): string {
@@ -368,7 +397,7 @@ export function createRemoteBase(): RemoteBaseCallable {
             selection === 'all*' ||
             selection === '**'
         ) {
-            const bases = await listBases();
+            const bases = await listBases(true);
 
             if (selection === 'all' || selection === '*') {
                 return bases;
@@ -392,18 +421,22 @@ export function createRemoteBase(): RemoteBaseCallable {
         }
 
         const result: RemoteBaseInitResult = [];
+        const normalized = normalizeInitBases(selection);
+        const availableBases = await listBases(true);
+        const metadataById = new Map(
+            availableBases.map(base => [normalizeRef(base.id), base])
+        );
 
-        for (const item of normalizeInitBases(selection)) {
+        for (const item of normalized) {
+            const baseMetadata =
+                metadataById.get(normalizeRef(item.id)) ?? { id: item.id };
+
             if (!item.schema) {
-                result.push(
-                    await request<RemoteBaseSchema>(
-                        `/meta/bases/${encodeURIComponent(item.id)}`
-                    )
-                );
+                result.push(baseMetadata);
                 continue;
             }
 
-            const base = await link(getState(item.id));
+            const base = await link(getState(item.id), baseMetadata);
 
             if (item.fullData) {
                 await base.fetchFullData();
