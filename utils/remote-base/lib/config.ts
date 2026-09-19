@@ -1,10 +1,10 @@
+import { normalizeRef } from '../../core/reference.ts';
 import type { ParsedConnectionArgs, RemoteBaseConfig } from './types.ts';
+
+export { normalizeRef };
 
 const BASE_ID_RE = /\b(?<baseId>app\w{14})\b/;
 const TABLE_ID_RE = /\b(?<tableId>tbl\w{14})\b/;
-
-export const normalizeRef = (value: unknown): string =>
-    String(value).trim().toLowerCase();
 
 export function parseAirtableRefs(value: unknown): { id?: string; table?: string } {
     if (typeof value !== 'string') return {};
