@@ -438,20 +438,20 @@ export function createRemoteBase(): RemoteBaseCallable {
         for (const item of normalized) {
             const listedMetadata = metadataById.get(normalizeRef(item.id));
 
-            if (!item.schema) {
-                if (!listedMetadata) {
-                    throw new Error(
-                        `Airtable base is not accessible to this token: ${item.id}`
-                    );
-                }
+            if (!listedMetadata) {
+                throw new Error(
+                    `Airtable base is not accessible to this token: ${item.id}`
+                );
+            }
 
+            if (!item.schema) {
                 result.push(listedMetadata);
                 continue;
             }
 
             const base = await link(
                 getState(item.id),
-                listedMetadata ?? { id: item.id },
+                listedMetadata,
             );
 
             if (item.fullData) {
