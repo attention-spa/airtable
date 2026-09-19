@@ -14,3 +14,23 @@ export function chunk<T>(
 
   return result;
 }
+
+/**
+ * Runs one asynchronous operation per validated batch, sequentially.
+ *
+ * Runtime-specific adapters keep ownership of the actual Airtable mutation;
+ * this helper owns only generic batching/order semantics.
+ */
+export async function runInBatches<T>(
+  values: readonly T[],
+  size: number,
+  run: (batch: readonly T[]) => Promise<unknown>,
+): Promise<number> {
+  const batches = chunk(values, size);
+
+  for (const batch of batches) {
+    await run(batch);
+  }
+
+  return batches.length;
+}
