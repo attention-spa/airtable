@@ -5,10 +5,24 @@ export type RemoteBaseConfig = {
 };
 
 export type AirtableRecordFields = Record<string, unknown>;
+export type AirtableRecordStrings = Record<string, string>;
+
+export type RemoteRecordFieldData = {
+    values: AirtableRecordFields;
+    strings: AirtableRecordStrings;
+};
+
+export type RemoteReadFormat = 'values' | 'strings' | 'both';
+
+export type RemoteReadOptions = {
+    refresh?: boolean;
+    format?: RemoteReadFormat;
+};
 
 export type RemoteRecord = {
     id: string;
     name: string;
+    field: RemoteRecordFieldData;
     fields: AirtableRecordFields;
 };
 
@@ -61,7 +75,7 @@ export type DeletedRecord = {
 
 export type RemoteTable = RemoteTableSchema & {
     readonly records: RemoteRecord[] | Promise<RemoteRecord[]>;
-    fetchFullRecords(options?: { refresh?: boolean }): Promise<RemoteRecord[]>;
+    fetchFullRecords(options?: RemoteReadOptions): Promise<RemoteRecord[]>;
     deleteRecords(input: DeleteInput | DeleteInput[]): Promise<DeletedRecord[]>;
     upsertRecords(input: UpsertInput | UpsertInput[], options?: UpsertOptions): Promise<UpsertResult>;
     field(ref: string): RemoteFieldSchema | undefined;
@@ -96,13 +110,13 @@ export type RemoteBase = RemoteBaseSchema & {
     readonly link: Promise<RemoteBase>;
     readonly data: Promise<RemoteBase>;
     update(updates: RemoteBaseUpdate): Promise<RemoteBaseUpdateResult>;
-    fetchFullData(options?: { refresh?: boolean }): Promise<RemoteBase>;
+    fetchFullData(options?: RemoteReadOptions): Promise<RemoteBase>;
     [key: string]: unknown;
 };
 
 export type DeferredRemoteTable = PromiseLike<RemoteTable> & {
     readonly records: Promise<RemoteRecord[]>;
-    fetchFullRecords(options?: { refresh?: boolean }): Promise<RemoteRecord[]>;
+    fetchFullRecords(options?: RemoteReadOptions): Promise<RemoteRecord[]>;
     deleteRecords(input: DeleteInput | DeleteInput[]): Promise<DeletedRecord[]>;
     upsertRecords(input: UpsertInput | UpsertInput[], options?: UpsertOptions): Promise<UpsertResult>;
 };
@@ -113,7 +127,7 @@ export type RemoteBaseHandle = PromiseLike<RemoteBase> & {
     readonly table: unknown;
     readonly tables: Promise<RemoteTableRegistry>;
     update(updates: RemoteBaseUpdate): Promise<RemoteBaseUpdateResult>;
-    fetchFullData(options?: { refresh?: boolean }): Promise<RemoteBase>;
+    fetchFullData(options?: RemoteReadOptions): Promise<RemoteBase>;
     [key: string]: unknown;
 };
 
@@ -138,15 +152,3 @@ export type AirtableRequest = <T = unknown>(
         retries?: number;
     }
 ) => Promise<T>;
-
-export type RemoteBaseCallable = {
-    (...args: Array<string | RemoteBaseConfig>):
-        | RemoteBase
-        | RemoteBaseHandle
-        | RemoteTable
-        | DeferredRemoteTable
-        | RemoteBaseCallable;
-    auth?: string;
-    config(value: RemoteBaseConfig): RemoteBase | RemoteBaseHandle | RemoteBaseCallable;
-    [key: string]: unknown;
-};

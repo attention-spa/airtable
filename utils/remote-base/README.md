@@ -38,7 +38,39 @@ const records = await remoteBase('appXXXXXXXXXXXXXX').Tasks.records;
 const data = await remoteBase('appXXXXXXXXXXXXXX').data;
 ```
 
-After a base links, subsequent base lookups return the cached base synchronously. Table data behaves the same way after it has loaded.
+Default reads fetch Airtable's normal JSON cell values. Record cell data is stored under `record.field`, keyed by normalized field ID:
+
+```ts
+const [record] = await remoteBase('appXXXXXXXXXXXXXX').Tasks.records;
+
+record.field.values.fldxxxxxxxxxxxxxx;
+record.field.strings; // {} until explicitly loaded
+```
+
+`record.fields` does not store a second copy of the cell data. It is a case-insensitive proxy over `record.field.values` that accepts either a field name or field ID:
+
+```ts
+record.fields.Status;
+record.fields.status;
+record.fields['fldXXXXXXXXXXXXXX'];
+```
+
+All three resolve through the table schema to the same normalized field ID and return the corresponding value from `record.field.values`.
+
+String-formatted Airtable reads are explicit because they require a separate Web API request:
+
+```ts
+const table = await remoteBase('appXXXXXXXXXXXXXX').Tasks;
+
+await table.fetchFullRecords({ format: 'strings' });
+record.field.strings.fldxxxxxxxxxxxxxx;
+
+await table.fetchFullRecords({ format: 'both' });
+```
+
+`format: 'both'` loads normal values first and string-formatted values second. `record.fields` always proxies `record.field.values`, never `record.field.strings`.
+
+After a base links, subsequent base lookups return the cached base synchronously. Table data behaves the same way after the requested read format has loaded.
 
 `base.table` is the same array object as `base.tables`, decorated with non-enumerable getters and a case-insensitive `.get(ref)` lookup:
 

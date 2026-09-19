@@ -1,11 +1,16 @@
 import { normalizeRef } from './config.ts';
 import { chunk } from './request.ts';
 import type {
+    AirtableRecordFields,
+    AirtableRecordStrings,
     AirtableRequest,
     DeletedRecord,
     DeleteInput,
     RemoteFieldSchema,
+    RemoteReadFormat,
+    RemoteReadOptions,
     RemoteRecord,
+    RemoteRecordFieldData,
     RemoteTable,
     RemoteTableSchema,
     UpsertInput,
@@ -13,14 +18,23 @@ import type {
     UpsertResult,
 } from './types.ts';
 
+type RawRecord = {
+    id: string;
+    fields: Record<string, unknown>;
+};
+
 type RecordsResponse = {
-    records: Array<{ id: string; fields: Record<string, unknown> }>;
+    records: RawRecord[];
     offset?: string;
     createdRecords?: string[];
     updatedRecords?: string[];
 };
 
 type DeleteResponse = { records: DeletedRecord[] };
+type LoadedReadFormat = Exclude<RemoteReadFormat, 'both'>;
+
+const hasOwn = (target: object, key: PropertyKey): boolean =>
+    Object.prototype.hasOwnProperty.call(target, key);
 
 export function createRemoteTable(
     baseId: string,
@@ -34,13 +48,23 @@ export function createRemoteTable(
         schema.fields.map(field => [normalizeRef(field.name), field])
     );
     const primaryField = fieldsById.get(normalizeRef(schema.primaryFieldId));
+    const primaryFieldKey = primaryField
+        ? normalizeRef(primaryField.id)
+        : normalizeRef(schema.primaryFieldId);
+
     const cache: {
-        loaded: boolean;
-        loading: Promise<RemoteRecord[]> | null;
+        loaded: Record<LoadedReadFormat, boolean>;
+        loading: Record<LoadedReadFormat, Promise<RemoteRecord[]> | null>;
         records: RemoteRecord[];
     } = {
-        loaded: false,
-        loading: null,
+        loaded: {
+            values: false,
+            strings: false,
+        },
+        loading: {
+            values: null,
+            strings: null,
+        },
         records: [],
     };
 
@@ -49,48 +73,138 @@ export function createRemoteTable(
         return fieldsById.get(key) ?? fieldsByName.get(key);
     }
 
-    function normalizeFields(
+    function canonicalFieldRef(ref: string): string | undefined {
+        const field = resolveField(ref);
+        return field ? normalizeRef(field.id) : undefined;
+    }
+
+    function normalizeValueFields(
         fields: Record<string, unknown> = {},
-    ): Record<string, unknown> {
+    ): AirtableRecordFields {
         return Object.fromEntries(
             Object.entries(fields).map(([key, value]) => [
-                fieldsById.get(normalizeRef(key))?.name ?? key,
+                canonicalFieldRef(key) ?? normalizeRef(key),
                 value,
             ])
         );
     }
 
-    function normalizeRecord(
-        record: { id: string; fields: Record<string, unknown> },
-    ): RemoteRecord {
-        const fields = normalizeFields(record.fields);
-        const primaryValue =
-            record.fields?.[schema.primaryFieldId] ??
-            fields[primaryField?.name ?? ''];
+    function normalizeStringFields(
+        fields: Record<string, unknown> = {},
+    ): AirtableRecordStrings {
+        return Object.fromEntries(
+            Object.entries(fields).map(([key, value]) => [
+                canonicalFieldRef(key) ?? normalizeRef(key),
+                typeof value === 'string' ? value : String(value ?? ''),
+            ])
+        );
+    }
+
+    function createFieldsProxy(
+        field: RemoteRecordFieldData,
+    ): AirtableRecordFields {
+        const target = Object.create(null) as AirtableRecordFields;
+
+        return new Proxy(target, {
+            get(_, property, receiver) {
+                if (typeof property !== 'string') {
+                    return Reflect.get(target, property, receiver);
+                }
+
+                const ref = canonicalFieldRef(property);
+                return ref ? field.values[ref] : undefined;
+            },
+            has(_, property) {
+                if (typeof property !== 'string') return false;
+                const ref = canonicalFieldRef(property);
+                return Boolean(ref && hasOwn(field.values, ref));
+            },
+            ownKeys() {
+                return schema.fields
+                    .filter(fieldSchema =>
+                        hasOwn(field.values, normalizeRef(fieldSchema.id))
+                    )
+                    .map(fieldSchema => fieldSchema.name);
+            },
+            getOwnPropertyDescriptor(_, property) {
+                if (typeof property !== 'string') return undefined;
+                const ref = canonicalFieldRef(property);
+
+                if (!ref || !hasOwn(field.values, ref)) {
+                    return undefined;
+                }
+
+                return {
+                    configurable: true,
+                    enumerable: true,
+                };
+            },
+        });
+    }
+
+    function createRecord(id: string): RemoteRecord {
+        const field: RemoteRecordFieldData = {
+            values: {},
+            strings: {},
+        };
 
         return {
-            id: record.id,
-            name: String(primaryValue ?? ''),
-            fields,
+            id,
+            name: '',
+            field,
+            fields: createFieldsProxy(field),
         };
     }
 
-    function mergeCache(records: RemoteRecord[]): void {
-        if (!cache.loaded) return;
+    function refreshRecordName(record: RemoteRecord): void {
+        const primaryValue =
+            record.field.values[primaryFieldKey] ??
+            record.field.strings[primaryFieldKey];
 
-        const byId = new Map(cache.records.map(record => [record.id, record]));
-        for (const record of records) byId.set(record.id, record);
-        cache.records = [...byId.values()];
+        record.name = String(primaryValue ?? '');
     }
 
-    async function fetchFullRecords(
-        { refresh = false }: { refresh?: boolean } = {},
-    ): Promise<RemoteRecord[]> {
-        if (cache.loading) return cache.loading;
-        if (cache.loaded && !refresh) return cache.records;
+    function normalizeValueRecord(record: RawRecord): RemoteRecord {
+        const normalized = createRecord(record.id);
+        normalized.field.values = normalizeValueFields(record.fields);
+        refreshRecordName(normalized);
+        return normalized;
+    }
 
-        cache.loading = (async () => {
-            const records: RemoteRecord[] = [];
+    function applyFullRead(
+        format: LoadedReadFormat,
+        records: RawRecord[],
+    ): RemoteRecord[] {
+        const existingById = new Map(
+            cache.records.map(record => [record.id, record])
+        );
+
+        cache.records = records.map(raw => {
+            const record = existingById.get(raw.id) ?? createRecord(raw.id);
+
+            if (format === 'values') {
+                record.field.values = normalizeValueFields(raw.fields);
+            } else {
+                record.field.strings = normalizeStringFields(raw.fields);
+            }
+
+            refreshRecordName(record);
+            return record;
+        });
+
+        cache.loaded[format] = true;
+        return cache.records;
+    }
+
+    async function fetchFormat(
+        format: LoadedReadFormat,
+        refresh: boolean,
+    ): Promise<RemoteRecord[]> {
+        if (cache.loading[format]) return cache.loading[format]!;
+        if (cache.loaded[format] && !refresh) return cache.records;
+
+        cache.loading[format] = (async () => {
+            const records: RawRecord[] = [];
             let offset: string | undefined;
 
             do {
@@ -98,24 +212,69 @@ export function createRemoteTable(
                     pageSize: '100',
                     returnFieldsByFieldId: 'true',
                 });
+
+                if (format === 'strings') {
+                    params.set('cellFormat', 'string');
+                }
+
                 if (offset) params.set('offset', offset);
 
                 const page = await request<RecordsResponse>(
                     `/${encodeURIComponent(baseId)}/${encodeURIComponent(schema.id)}?${params}`
                 );
-                records.push(...page.records.map(normalizeRecord));
+
+                records.push(...page.records);
                 offset = page.offset;
             } while (offset);
 
-            cache.records = records;
-            cache.loaded = true;
-            return cache.records;
+            return applyFullRead(format, records);
         })();
 
         try {
-            return await cache.loading;
+            return await cache.loading[format]!;
         } finally {
-            cache.loading = null;
+            cache.loading[format] = null;
+        }
+    }
+
+    async function fetchFullRecords(
+        { refresh = false, format = 'values' }: RemoteReadOptions = {},
+    ): Promise<RemoteRecord[]> {
+        if (format === 'both') {
+            await fetchFormat('values', refresh);
+            return fetchFormat('strings', refresh);
+        }
+
+        return fetchFormat(format, refresh);
+    }
+
+    function mergeValueCache(records: RemoteRecord[]): void {
+        if (!cache.loaded.values && !cache.loaded.strings) return;
+
+        const byId = new Map(cache.records.map(record => [record.id, record]));
+
+        for (const next of records) {
+            const current = byId.get(next.id);
+
+            if (!current) {
+                if (cache.loaded.values) byId.set(next.id, next);
+                continue;
+            }
+
+            if (cache.loaded.values) {
+                current.field.values = next.field.values;
+            }
+
+            current.field.strings = {};
+            refreshRecordName(current);
+        }
+
+        if (cache.loaded.values) {
+            cache.records = [...byId.values()];
+        }
+
+        if (records.length && cache.loaded.strings) {
+            cache.loaded.strings = false;
         }
     }
 
@@ -147,7 +306,7 @@ export function createRemoteTable(
             deleted.push(...result.records);
         }
 
-        if (cache.loaded) {
+        if (cache.loaded.values || cache.loaded.strings) {
             const deletedIds = new Set(
                 deleted.filter(record => record.deleted).map(record => record.id)
             );
@@ -207,11 +366,11 @@ export function createRemoteTable(
                 }
             );
 
-            const normalized = response.records.map(normalizeRecord);
+            const normalized = response.records.map(normalizeValueRecord);
             result.records.push(...normalized);
             result.createdRecords.push(...(response.createdRecords ?? []));
             result.updatedRecords.push(...(response.updatedRecords ?? []));
-            mergeCache(normalized);
+            mergeValueCache(normalized);
         }
 
         return result;
@@ -224,15 +383,15 @@ export function createRemoteTable(
         upsertRecords,
         field: resolveField,
         record(id: string) {
-            return cache.loaded
-                ? cache.records.find(record => record.id === id)
-                : undefined;
+            return cache.records.find(record => record.id === id);
         },
     } as RemoteTable;
 
     Object.defineProperty(table, 'records', {
         enumerable: true,
-        get: () => cache.loaded ? cache.records : fetchFullRecords(),
+        get: () => cache.loaded.values
+            ? cache.records
+            : fetchFullRecords(),
     });
 
     return table;

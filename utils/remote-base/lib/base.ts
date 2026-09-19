@@ -128,9 +128,9 @@ export function createLinkedBase(
         update(updates: RemoteBaseUpdate) {
             return updateBase(base, updates);
         },
-        async fetchFullData({ refresh = false } = {}) {
+        async fetchFullData(options = {}) {
             for (const table of tables) {
-                await table.fetchFullRecords({ refresh });
+                await table.fetchFullRecords(options);
             }
             return base;
         },

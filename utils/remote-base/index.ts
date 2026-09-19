@@ -1,6 +1,7 @@
 export { createRemoteBase, remoteBase } from './lib/class.ts';
 export type {
     AirtableRecordFields,
+    AirtableRecordStrings,
     DeferredRemoteTable,
     DeleteInput,
     DeletedRecord,
@@ -12,7 +13,10 @@ export type {
     RemoteBaseUpdateOperation,
     RemoteBaseUpdateResult,
     RemoteFieldSchema,
+    RemoteReadFormat,
+    RemoteReadOptions,
     RemoteRecord,
+    RemoteRecordFieldData,
     RemoteTable,
     RemoteTableRegistry,
     RemoteTableSchema,
