@@ -1,4 +1,4 @@
-export { chunk } from "./batching.ts";
+export { chunk, runInBatches } from "./batching.ts";
 export {
   createReferenceIndex,
   normalizeRef,
