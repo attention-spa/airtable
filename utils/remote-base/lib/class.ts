@@ -255,10 +255,9 @@ export function createRemoteBase(): RemoteBaseCallable {
         let offset: string | undefined;
 
         do {
-            const params = new URLSearchParams();
-            if (offset) params.set('offset', offset);
-
-            const suffix = params.size ? `?${params}` : '';
+            const suffix = offset
+                ? `?${new URLSearchParams({ offset })}`
+                : '';
             const page = await request<BasesMetadataResponse>(
                 `/meta/bases${suffix}`
             );
@@ -300,8 +299,9 @@ export function createRemoteBase(): RemoteBaseCallable {
         value: RemoteBaseInitBase,
     ): NormalizedInitBase {
         if (typeof value === 'string') {
-            const withSchema = value.endsWith('*');
-            const raw = withSchema ? value.slice(0, -1) : value;
+            const source = value.trim();
+            const withSchema = source.endsWith('*');
+            const raw = withSchema ? source.slice(0, -1) : source;
 
             return {
                 id: parseBaseId(raw),
@@ -320,6 +320,14 @@ export function createRemoteBase(): RemoteBaseCallable {
                     .filter(Boolean)
             ),
         ];
+
+        for (const recordId of records) {
+            if (!/^rec\w{14}$/i.test(recordId)) {
+                throw new TypeError(
+                    `Invalid Airtable record ID: ${recordId}`
+                );
+            }
+        }
 
         return {
             id: parseBaseId(option.id),
@@ -428,15 +436,23 @@ export function createRemoteBase(): RemoteBaseCallable {
         );
 
         for (const item of normalized) {
-            const baseMetadata =
-                metadataById.get(normalizeRef(item.id)) ?? { id: item.id };
+            const listedMetadata = metadataById.get(normalizeRef(item.id));
 
             if (!item.schema) {
-                result.push(baseMetadata);
+                if (!listedMetadata) {
+                    throw new Error(
+                        `Airtable base is not accessible to this token: ${item.id}`
+                    );
+                }
+
+                result.push(listedMetadata);
                 continue;
             }
 
-            const base = await link(getState(item.id), baseMetadata);
+            const base = await link(
+                getState(item.id),
+                listedMetadata ?? { id: item.id },
+            );
 
             if (item.fullData) {
                 await base.fetchFullData();
