@@ -18,6 +18,7 @@ export type {
     RemoteHiddenMetadata,
     RemoteHiddenMetadataKey,
     RemoteHiddenMetadataType,
+    RemoteLinkedRecordRef,
     RemoteReadFormat,
     RemoteReadOptions,
     RemoteRecord,
