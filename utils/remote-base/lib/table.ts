@@ -249,7 +249,7 @@ export function createRemoteTable(
     }
 
     function mergeValueCache(records: RemoteRecord[]): void {
-        if (!cache.loaded.values) return;
+        if (!cache.loaded.values && !cache.loaded.strings) return;
 
         const byId = new Map(cache.records.map(record => [record.id, record]));
 
@@ -257,18 +257,23 @@ export function createRemoteTable(
             const current = byId.get(next.id);
 
             if (!current) {
-                byId.set(next.id, next);
+                if (cache.loaded.values) byId.set(next.id, next);
                 continue;
             }
 
-            current.field.values = next.field.values;
+            if (cache.loaded.values) {
+                current.field.values = next.field.values;
+            }
+
             current.field.strings = {};
             refreshRecordName(current);
         }
 
-        cache.records = [...byId.values()];
+        if (cache.loaded.values) {
+            cache.records = [...byId.values()];
+        }
 
-        if (records.length) {
+        if (records.length && cache.loaded.strings) {
             cache.loaded.strings = false;
         }
     }
