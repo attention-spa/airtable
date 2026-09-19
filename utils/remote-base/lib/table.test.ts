@@ -140,7 +140,7 @@ describe('remote-base record field reads', () => {
         expect(table.record('recExample0000001')).toBe(records[0]);
         expect(request).toHaveBeenCalledTimes(1);
 
-        void table.records;
+        await table.records;
         expect(request).toHaveBeenCalledTimes(2);
     });
 });
