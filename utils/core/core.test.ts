@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { chunk } from "./batching.ts";
+import { describe, expect, it, vi } from "vitest";
+import { chunk, runInBatches } from "./batching.ts";
 import {
   createReferenceIndex,
   normalizeRef,
@@ -22,5 +22,16 @@ describe("shared Airtable core", () => {
   it("chunks values with validated batch sizes", () => {
     expect(chunk([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
     expect(() => chunk([1], 0)).toThrow(RangeError);
+  });
+
+  it("runs batches sequentially through a caller-owned operation", async () => {
+    const calls: number[][] = [];
+    const run = vi.fn(async (batch: readonly number[]) => {
+      calls.push([...batch]);
+    });
+
+    await expect(runInBatches([1, 2, 3, 4, 5], 2, run)).resolves.toBe(3);
+    expect(calls).toEqual([[1, 2], [3, 4], [5]]);
+    expect(run).toHaveBeenCalledTimes(3);
   });
 });
