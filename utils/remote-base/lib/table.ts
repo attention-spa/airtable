@@ -1,5 +1,9 @@
-import { normalizeRef } from './config.ts';
-import { chunk } from './request.ts';
+import { chunk } from '../../core/batching.ts';
+import {
+    createReferenceIndex,
+    normalizeRef,
+    resolveReference,
+} from '../../core/reference.ts';
 import type {
     AirtableRecordFields,
     AirtableRecordStrings,
@@ -41,13 +45,8 @@ export function createRemoteTable(
     schema: RemoteTableSchema,
     request: AirtableRequest,
 ): RemoteTable {
-    const fieldsById = new Map(
-        schema.fields.map(field => [normalizeRef(field.id), field])
-    );
-    const fieldsByName = new Map(
-        schema.fields.map(field => [normalizeRef(field.name), field])
-    );
-    const primaryField = fieldsById.get(normalizeRef(schema.primaryFieldId));
+    const fieldIndex = createReferenceIndex(schema.fields);
+    const primaryField = resolveReference(fieldIndex, schema.primaryFieldId);
     const primaryFieldKey = primaryField
         ? normalizeRef(primaryField.id)
         : normalizeRef(schema.primaryFieldId);
@@ -69,8 +68,7 @@ export function createRemoteTable(
     };
 
     function resolveField(ref: string): RemoteFieldSchema | undefined {
-        const key = normalizeRef(ref);
-        return fieldsById.get(key) ?? fieldsByName.get(key);
+        return resolveReference(fieldIndex, ref);
     }
 
     function canonicalFieldRef(ref: string): string | undefined {
@@ -410,7 +408,7 @@ export function createRemoteTable(
         if (!ids.length) return [];
         const deleted: DeletedRecord[] = [];
 
-        for (const batch of chunk(ids)) {
+        for (const batch of chunk(ids, 10)) {
             const params = new URLSearchParams();
             for (const id of batch) params.append('records[]', id);
 
@@ -467,7 +465,7 @@ export function createRemoteTable(
             updatedRecords: [],
         };
 
-        for (const batch of chunk(records)) {
+        for (const batch of chunk(records, 10)) {
             const response = await request<RecordsResponse>(
                 `/${encodeURIComponent(baseId)}/${encodeURIComponent(schema.id)}`,
                 {
