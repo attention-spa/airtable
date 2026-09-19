@@ -225,17 +225,19 @@ describe('remoteBase.init', () => {
         const freelanceBase = 'appFreelance00000';
         const overlapBase = 'appOverlap0000000';
         const mapBase = 'appMaps0000000000';
+        const idRegexBase = 'app9FSOther000000';
         const otherBase = 'appOther000000000';
 
         const available = [
             { id: schemaBase, name: 'Release Catalog' },
             { id: fullBase, name: 'GitHub DevOps' },
+            { id: otherBase, name: 'Other Base' },
+            { id: mapBase, name: 'Maps Archive' },
+            { id: idRegexBase, name: 'ID Regex Only' },
             { id: redditBase, name: 'Reddit Watch' },
             { id: formulaBase, name: 'Formula Lab' },
             { id: freelanceBase, name: 'Freelance Jobs' },
             { id: overlapBase, name: 'Reddit Formula Freelance' },
-            { id: mapBase, name: 'Maps Archive' },
-            { id: otherBase, name: 'Other Base' },
         ];
 
         const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -286,6 +288,19 @@ describe('remoteBase.init', () => {
 
         const byId = new Map(result.map(base => [base.id, base]));
 
+        expect(byId.size).toBe(available.length);
+        expect(result.map(base => base.id)).toEqual([
+            schemaBase,
+            fullBase,
+            redditBase,
+            overlapBase,
+            formulaBase,
+            freelanceBase,
+            idRegexBase,
+            mapBase,
+            otherBase,
+        ]);
+
         const hasSchema = (id: string) =>
             Boolean((byId.get(id) as RemoteBase | undefined)?.table);
         const hasRecord = (id: string) =>
@@ -314,6 +329,7 @@ describe('remoteBase.init', () => {
         expect(hasSchema(overlapBase)).toBe(true);
         expect(hasRecord(overlapBase)).toBe(true);
 
+        expect(hasSchema(idRegexBase)).toBe(false);
         expect(hasSchema(mapBase)).toBe(false);
         expect(hasSchema(otherBase)).toBe(false);
 
