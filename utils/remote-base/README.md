@@ -31,6 +31,64 @@ const rb = remoteBase(AIRTABLE_TOKEN);
 const base = await rb('appXXXXXXXXXXXXXX');
 ```
 
+## Bulk initialization
+
+`remoteBase.init()` can discover or preload multiple bases for one PAT:
+
+```ts
+await remoteBase.init({
+    auth: AIRTABLE_TOKEN,
+    bases: 'all',
+});
+```
+
+The `bases` selector defaults to `'all'`:
+
+- `'all'` and `'*'` list every base accessible to the PAT without fetching table schemas.
+- `'all*'` and `'**'` list every accessible base and load each base's table schema.
+- A bare base ID such as `'appXXXXXXXXXXXXXX'` fetches base metadata only.
+- A suffixed base ID such as `'appXXXXXXXXXXXXXX*'` loads that base and its table schema.
+- Object selectors default to `schema: true` and allow record preloading.
+
+```ts
+const bases = await remoteBase.init({
+    auth: AIRTABLE_TOKEN,
+    bases: [
+        'appAAAAAAAAAAAAAA',
+        'appBBBBBBBBBBBBBB*',
+        {
+            id: 'appCCCCCCCCCCCCCC',
+            schema: true,
+            records: [
+                'recAAAAAAAAAAAAAA',
+                'recBBBBBBBBBBBBBB',
+            ],
+        },
+        {
+            id: 'appDDDDDDDDDDDDDD',
+            allRecords: true,
+        },
+    ],
+});
+```
+
+`fullData: true` and `allRecords: true` are aliases. Either loads the base schema and then calls `fetchFullData()`. Supplying `records` loads the schema and fetches only those record IDs, searching the base's tables until each record is found.
+
+Record loading necessarily requires table schema. Therefore `schema: false` is ignored when `fullData`, `allRecords`, or a non-empty `records` list is supplied:
+
+```ts
+await remoteBase.init({
+    auth: AIRTABLE_TOKEN,
+    bases: [{
+        id: 'app8N0WokOcmuuyDi',
+        allRecords: true,
+        schema: false, // effectively true because records require schema
+    }],
+});
+```
+
+Duplicate base selectors are merged. The strongest request wins: schema loading is preserved, `fullData`/`allRecords` wins over partial record loading, and requested record IDs are de-duplicated.
+
 ## Lazy data
 
 ```ts

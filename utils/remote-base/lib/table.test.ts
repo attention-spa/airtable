@@ -116,4 +116,29 @@ describe('remote-base record field reads', () => {
         expect(record.field.strings.fldcount00000001).toBe('2');
         expect(request).toHaveBeenCalledTimes(2);
     });
+
+    it('can fetch selected record IDs without marking the whole table loaded', async () => {
+        const request = vi.fn(async (_path: string) => ({
+            records: [{
+                id: 'recExample0000001',
+                fields: {
+                    fldName000000001: 'Alpha',
+                    fldCount00000001: 2,
+                },
+            }],
+        })) as unknown as AirtableRequest;
+
+        const table = createRemoteTable('appExample0000001', schema, request);
+        const records = await table.fetchRecords(['recExample0000001']);
+
+        expect(records).toHaveLength(1);
+        expect(records[0].id).toBe('recExample0000001');
+        expect(table.record('recExample0000001')).toBe(records[0]);
+        expect(request).toHaveBeenCalledTimes(1);
+        expect((request as any).mock.calls[0][0]).toContain('filterByFormula=');
+
+        await table.records;
+        expect(request).toHaveBeenCalledTimes(2);
+        expect((request as any).mock.calls[1][0]).not.toContain('filterByFormula=');
+    });
 });
