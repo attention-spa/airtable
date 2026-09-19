@@ -19,6 +19,28 @@ export type RemoteReadOptions = {
     format?: RemoteReadFormat;
 };
 
+export type RemoteHiddenMetadataKey = null | boolean | string;
+
+export type RemoteHiddenMetadataType =
+    | 'record'
+    | 'field'
+    | 'fieldOptions'
+    | 'table'
+    | 'view'
+    | 'cellValue'
+    | 'cellStringValue'
+    | 'base';
+
+export type RemoteHiddenMetadata = {
+    type: RemoteHiddenMetadataType;
+    readonly parent: unknown;
+};
+
+export type RemoteFullDataOptions = RemoteReadOptions & {
+    followRecordLinks?: boolean;
+    hiddenMetadataKey?: RemoteHiddenMetadataKey;
+};
+
 export type RemoteRecord = {
     id: string;
     name: string;
@@ -26,7 +48,17 @@ export type RemoteRecord = {
     fields: AirtableRecordFields;
 };
 
+export type RemoteFieldOptions = Record<string, unknown>;
+
 export type RemoteFieldSchema = {
+    id: string;
+    name: string;
+    type?: string;
+    options?: RemoteFieldOptions;
+    [key: string]: unknown;
+};
+
+export type RemoteViewSchema = {
     id: string;
     name: string;
     type?: string;
@@ -38,6 +70,7 @@ export type RemoteTableSchema = {
     name: string;
     primaryFieldId: string;
     fields: RemoteFieldSchema[];
+    views?: RemoteViewSchema[];
     [key: string]: unknown;
 };
 
@@ -110,7 +143,7 @@ export type RemoteBase = RemoteBaseSchema & {
     readonly link: Promise<RemoteBase>;
     readonly data: Promise<RemoteBase>;
     update(updates: RemoteBaseUpdate): Promise<RemoteBaseUpdateResult>;
-    fetchFullData(options?: RemoteReadOptions): Promise<RemoteBase>;
+    fetchFullData(options?: RemoteFullDataOptions): Promise<RemoteBase>;
     [key: string]: unknown;
 };
 
@@ -127,7 +160,7 @@ export type RemoteBaseHandle = PromiseLike<RemoteBase> & {
     readonly table: unknown;
     readonly tables: Promise<RemoteTableRegistry>;
     update(updates: RemoteBaseUpdate): Promise<RemoteBaseUpdateResult>;
-    fetchFullData(options?: RemoteReadOptions): Promise<RemoteBase>;
+    fetchFullData(options?: RemoteFullDataOptions): Promise<RemoteBase>;
     [key: string]: unknown;
 };
 
