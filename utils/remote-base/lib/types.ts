@@ -4,6 +4,28 @@ export type RemoteBaseConfig = {
     auth?: string;
 };
 
+export type RemoteBaseInitBaseOptions = {
+    id: string;
+    fullData?: boolean;
+    allRecords?: boolean;
+    records?: string[];
+    schema?: boolean;
+};
+
+export type RemoteBaseInitBase = string | RemoteBaseInitBaseOptions;
+
+export type RemoteBaseInitBases =
+    | 'all'
+    | '*'
+    | 'all*'
+    | '**'
+    | RemoteBaseInitBase[];
+
+export type RemoteBaseInitOptions = {
+    auth: string;
+    bases?: RemoteBaseInitBases;
+};
+
 export type AirtableRecordFields = Record<string, unknown>;
 export type AirtableRecordStrings = Record<string, string>;
 
@@ -114,6 +136,7 @@ export type DeletedRecord = {
 export type RemoteTable = RemoteTableSchema & {
     readonly records: RemoteRecord[] | Promise<RemoteRecord[]>;
     fetchFullRecords(options?: RemoteReadOptions): Promise<RemoteRecord[]>;
+    fetchRecords(recordIds: string[], options?: RemoteReadOptions): Promise<RemoteRecord[]>;
     deleteRecords(input: DeleteInput | DeleteInput[]): Promise<DeletedRecord[]>;
     upsertRecords(input: UpsertInput | UpsertInput[], options?: UpsertOptions): Promise<UpsertResult>;
     field(ref: string): RemoteFieldSchema | undefined;
@@ -155,6 +178,7 @@ export type RemoteBase = RemoteBaseSchema & {
 export type DeferredRemoteTable = PromiseLike<RemoteTable> & {
     readonly records: Promise<RemoteRecord[]>;
     fetchFullRecords(options?: RemoteReadOptions): Promise<RemoteRecord[]>;
+    fetchRecords(recordIds: string[], options?: RemoteReadOptions): Promise<RemoteRecord[]>;
     deleteRecords(input: DeleteInput | DeleteInput[]): Promise<DeletedRecord[]>;
     upsertRecords(input: UpsertInput | UpsertInput[], options?: UpsertOptions): Promise<UpsertResult>;
 };
@@ -180,6 +204,21 @@ export type ParsedConnectionArgs = {
     id?: string;
     table?: string;
     auth?: string;
+};
+
+export type RemoteBaseInitResult = Array<RemoteBaseSchema | RemoteBase>;
+
+export type RemoteBaseCallable = {
+    (...args: Array<string | RemoteBaseConfig>):
+        | RemoteBaseCallable
+        | RemoteBase
+        | RemoteBaseHandle
+        | RemoteTable
+        | DeferredRemoteTable;
+    auth?: string;
+    config(value: RemoteBaseConfig): RemoteBaseCallable | RemoteBase | RemoteBaseHandle;
+    init(options: RemoteBaseInitOptions): Promise<RemoteBaseInitResult>;
+    [key: string]: unknown;
 };
 
 export type AirtableRequest = <T = unknown>(
