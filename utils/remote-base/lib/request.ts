@@ -1,18 +1,11 @@
+import { chunk } from '../../core/batching.ts';
 import type { AirtableRequest } from './types.ts';
+
+export { chunk };
 
 const API = 'https://api.airtable.com/v0';
 const sleep = (ms: number): Promise<void> =>
     new Promise(resolve => setTimeout(resolve, ms));
-
-export function chunk<T>(values: readonly T[], size = 10): T[][] {
-    const result: T[][] = [];
-
-    for (let i = 0; i < values.length; i += size) {
-        result.push(values.slice(i, i + size));
-    }
-
-    return result;
-}
 
 export function createRequest(getAuth: () => string | undefined): AirtableRequest {
     return async function request<T = unknown>(
