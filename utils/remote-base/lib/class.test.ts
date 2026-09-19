@@ -224,7 +224,7 @@ describe('remoteBase.init', () => {
         const formulaBase = 'appFormula0000000';
         const freelanceBase = 'appFreelance00000';
         const overlapBase = 'appOverlap0000000';
-        const mapBase = 'appMaps000000000';
+        const mapBase = 'appMaps0000000000';
         const otherBase = 'appOther000000000';
 
         const available = [
