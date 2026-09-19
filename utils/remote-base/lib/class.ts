@@ -36,6 +36,26 @@ type NormalizedInitBase = {
     records: string[];
 };
 
+type ParsedInitStringSelector =
+    | {
+        kind: 'base';
+        id: string;
+        schema: boolean;
+        fullData: boolean;
+    }
+    | {
+        kind: 'all';
+        schema: boolean;
+        fullData: boolean;
+    }
+    | {
+        kind: 'regex';
+        target: 'name' | 'id' | 'either';
+        regex: RegExp;
+        schema: boolean;
+        fullData: boolean;
+    };
+
 export function createRemoteBase(): RemoteBaseCallable {
     const states = new Map<string, RemoteBaseState>();
     let auth: string | undefined;
@@ -295,23 +315,99 @@ export function createRemoteBase(): RemoteBaseCallable {
         return id;
     }
 
-    function normalizeInitBase(
-        value: RemoteBaseInitBase,
-    ): NormalizedInitBase {
-        if (typeof value === 'string') {
-            const source = value.trim();
-            const withSchema = source.endsWith('*');
-            const raw = withSchema ? source.slice(0, -1) : source;
+    function parseInitLoadSuffix(value: string): {
+        source: string;
+        schema: boolean;
+        fullData: boolean;
+    } {
+        const source = value.trim();
 
+        if (source.endsWith('**')) {
             return {
-                id: parseBaseId(raw),
-                schema: withSchema,
-                fullData: false,
-                records: [],
+                source: source.slice(0, -2).trim(),
+                schema: true,
+                fullData: true,
             };
         }
 
-        const option = value as RemoteBaseInitBaseOptions;
+        if (source.endsWith('*')) {
+            return {
+                source: source.slice(0, -1).trim(),
+                schema: true,
+                fullData: false,
+            };
+        }
+
+        return {
+            source,
+            schema: false,
+            fullData: false,
+        };
+    }
+
+    function parseInitStringSelector(
+        value: string,
+    ): ParsedInitStringSelector {
+        const {
+            source,
+            schema,
+            fullData,
+        } = parseInitLoadSuffix(value);
+
+        if (!source) {
+            throw new TypeError(
+                `Invalid remoteBase.init selector: ${value}`
+            );
+        }
+
+        if (source.toLowerCase() === 'all') {
+            return {
+                kind: 'all',
+                schema,
+                fullData,
+            };
+        }
+
+        const regexMatch = source.match(
+            /^\(\?<(name_regex|id_regex|regex)>([\s\S]*)\)$/
+        );
+
+        if (regexMatch) {
+            const [, group, pattern] = regexMatch;
+            let regex: RegExp;
+
+            try {
+                regex = new RegExp(pattern, 'i');
+            } catch (error) {
+                throw new TypeError(
+                    `Invalid remoteBase.init regex selector ${value}: ${String(error)}`
+                );
+            }
+
+            return {
+                kind: 'regex',
+                target: group === 'name_regex'
+                    ? 'name'
+                    : group === 'id_regex'
+                        ? 'id'
+                        : 'either',
+                regex,
+                schema,
+                fullData,
+            };
+        }
+
+        return {
+            kind: 'base',
+            id: parseBaseId(source),
+            schema,
+            fullData,
+        };
+    }
+
+    function normalizeInitBaseOptions(
+        option: RemoteBaseInitBaseOptions,
+    ): NormalizedInitBase {
         const fullData = Boolean(option.fullData || option.allRecords);
         const records = [
             ...new Set(
@@ -339,29 +435,98 @@ export function createRemoteBase(): RemoteBaseCallable {
         };
     }
 
-    function normalizeInitBases(
+    function mergeInitBase(
+        normalized: Map<string, NormalizedInitBase>,
+        next: NormalizedInitBase,
+    ): void {
+        const key = normalizeRef(next.id);
+        const current = normalized.get(key);
+
+        if (!current) {
+            normalized.set(key, {
+                ...next,
+                records: [...next.records],
+            });
+            return;
+        }
+
+        current.fullData ||= next.fullData;
+        current.schema ||= next.schema;
+        current.records = [
+            ...new Set([...current.records, ...next.records]),
+        ];
+
+        if (current.fullData || current.records.length) {
+            current.schema = true;
+        }
+    }
+
+    function selectorMatchesBase(
+        selector: Extract<ParsedInitStringSelector, { kind: 'regex' }>,
+        base: RemoteBaseSchema,
+    ): boolean {
+        const id = String(base.id ?? '');
+        const name = String(base.name ?? '');
+
+        if (selector.target === 'id') {
+            return selector.regex.test(id);
+        }
+
+        if (selector.target === 'name') {
+            return selector.regex.test(name);
+        }
+
+        return selector.regex.test(id) || selector.regex.test(name);
+    }
+
+    function buildInitPlan(
         values: RemoteBaseInitBase[],
+        availableBases: RemoteBaseSchema[],
     ): NormalizedInitBase[] {
         const normalized = new Map<string, NormalizedInitBase>();
+        const metadataById = new Map(
+            availableBases.map(base => [normalizeRef(base.id), base])
+        );
 
         for (const value of values) {
-            const next = normalizeInitBase(value);
-            const key = normalizeRef(next.id);
-            const current = normalized.get(key);
-
-            if (!current) {
-                normalized.set(key, next);
+            if (typeof value !== 'string') {
+                const next = normalizeInitBaseOptions(value);
+                if (!metadataById.has(normalizeRef(next.id))) {
+                    throw new Error(
+                        `Airtable base is not accessible to this token: ${next.id}`
+                    );
+                }
+                mergeInitBase(normalized, next);
                 continue;
             }
 
-            current.schema ||= next.schema;
-            current.fullData ||= next.fullData;
-            current.records = [
-                ...new Set([...current.records, ...next.records]),
-            ];
+            const selector = parseInitStringSelector(value);
+            const makeMatch = (base: RemoteBaseSchema): NormalizedInitBase => ({
+                id: base.id,
+                schema: selector.schema,
+                fullData: selector.fullData,
+                records: [],
+            });
 
-            if (current.fullData || current.records.length) {
-                current.schema = true;
+            if (selector.kind === 'base') {
+                const base = metadataById.get(normalizeRef(selector.id));
+                if (!base) {
+                    throw new Error(
+                        `Airtable base is not accessible to this token: ${selector.id}`
+                    );
+                }
+                mergeInitBase(normalized, makeMatch(base));
+                continue;
+            }
+
+            const matches = selector.kind === 'all'
+                ? availableBases
+                : availableBases.filter(
+                    base => selectorMatchesBase(selector, base)
+                );
+
+            for (const base of matches) {
+                mergeInitBase(normalized, makeMatch(base));
             }
         }
 
@@ -429,8 +594,8 @@ export function createRemoteBase(): RemoteBaseCallable {
         }
 
         const result: RemoteBaseInitResult = [];
-        const normalized = normalizeInitBases(selection);
         const availableBases = await listBases(true);
+        const normalized = buildInitPlan(selection, availableBases);
         const metadataById = new Map(
             availableBases.map(base => [normalizeRef(base.id), base])
         );
