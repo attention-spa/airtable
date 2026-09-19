@@ -33,6 +33,9 @@ type RecordsResponse = {
 type DeleteResponse = { records: DeletedRecord[] };
 type LoadedReadFormat = Exclude<RemoteReadFormat, 'both'>;
 
+const hasOwn = (target: object, key: PropertyKey): boolean =>
+    Object.prototype.hasOwnProperty.call(target, key);
+
 export function createRemoteTable(
     baseId: string,
     schema: RemoteTableSchema,
@@ -114,12 +117,12 @@ export function createRemoteTable(
             has(_, property) {
                 if (typeof property !== 'string') return false;
                 const ref = canonicalFieldRef(property);
-                return Boolean(ref && Object.hasOwn(field.values, ref));
+                return Boolean(ref && hasOwn(field.values, ref));
             },
             ownKeys() {
                 return schema.fields
                     .filter(fieldSchema =>
-                        Object.hasOwn(field.values, normalizeRef(fieldSchema.id))
+                        hasOwn(field.values, normalizeRef(fieldSchema.id))
                     )
                     .map(fieldSchema => fieldSchema.name);
             },
@@ -127,7 +130,7 @@ export function createRemoteTable(
                 if (typeof property !== 'string') return undefined;
                 const ref = canonicalFieldRef(property);
 
-                if (!ref || !Object.hasOwn(field.values, ref)) {
+                if (!ref || !hasOwn(field.values, ref)) {
                     return undefined;
                 }
 
