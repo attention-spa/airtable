@@ -70,6 +70,85 @@ await table.fetchFullRecords({ format: 'both' });
 
 `format: 'both'` loads normal values first and string-formatted values second. `record.fields` always proxies `record.field.values`, never `record.field.strings`.
 
+### Full-base reads
+
+`fetchFullData()` additionally supports graph-style record-link resolution and hidden parent metadata:
+
+```ts
+const base = await remoteBase('appXXXXXXXXXXXXXX').link;
+
+await base.fetchFullData({
+    followRecordLinks: true,
+    hiddenMetadataKey: 'meta',
+});
+```
+
+The defaults are equivalent to:
+
+```ts
+await base.fetchFullData({
+    followRecordLinks: true,
+    hiddenMetadataKey: 'meta',
+});
+```
+
+`followRecordLinks: true` resolves linked-record cell arrays lazily. The raw Airtable record IDs remain stored once internally; the public cell property becomes a getter whose array contents resolve to the exact cached records in the linked table:
+
+```ts
+const task = base.Tasks.record('recXXXXXXXXXXXXXX');
+
+task.fields.Assignees[0] ===
+    base.People.record('recYYYYYYYYYYYYYY');
+```
+
+No linked record objects are copied into the source record. Setting `followRecordLinks: false` exposes the original record-ID arrays again.
+
+When `hiddenMetadataKey` is `'meta'` or `true`, supported objects receive a non-enumerable `meta` property:
+
+```ts
+record.meta.type;   // 'record'
+record.meta.parent; // parent table
+
+field.meta.type;    // 'field'
+field.meta.parent;  // parent table
+
+field.options.meta.type;   // 'fieldOptions'
+field.options.meta.parent; // parent field
+
+table.meta.type;    // 'table'
+table.meta.parent;  // parent base
+
+view.meta.type;     // 'view'
+view.meta.parent;   // parent table
+
+base.meta.type;     // 'base'
+base.meta.parent;   // undefined
+```
+
+Object-valued cell values, including linked-record arrays, also receive `cellValue` metadata whose `parent` resolves to the field. Primitive JavaScript values such as strings and numbers remain primitives and therefore cannot carry hidden properties without changing their runtime type.
+
+A custom key can be used:
+
+```ts
+await base.fetchFullData({
+    hiddenMetadataKey: 'context',
+});
+
+record.context.type;
+```
+
+Use `false` or `null` to disable hidden metadata:
+
+```ts
+await base.fetchFullData({
+    hiddenMetadataKey: false,
+});
+```
+
+The key must be a valid JavaScript property name. Reserved record keys such as `id`, `name`, `field`, and `fields` are rejected, and any collision with an existing object property throws rather than overwriting data.
+
+Existing read options remain available. If `format: 'strings'` is requested while `followRecordLinks` is enabled, `fetchFullData()` loads both values and strings because raw linked-record IDs are required to resolve record references.
+
 After a base links, subsequent base lookups return the cached base synchronously. Table data behaves the same way after the requested read format has loaded.
 
 `base.table` is the same array object as `base.tables`, decorated with non-enumerable getters and a case-insensitive `.get(ref)` lookup:
