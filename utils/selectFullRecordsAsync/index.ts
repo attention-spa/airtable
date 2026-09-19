@@ -1,3 +1,8 @@
+import {
+    createReferenceIndex,
+    resolveReference,
+} from "../core/reference.ts";
+
 export type SelectFullRecordsParams = {
     table: Table;
     view?: View["id"] | View["name"];
@@ -21,10 +26,6 @@ export type FullRecord = AirtableRecord & {
     ) => ReturnType<AirtableRecord["getCellValue"]> | string | FullRecordFieldData | undefined;
 };
 
-function normalizeRef(ref: string): string {
-    return String(ref).trim().toLowerCase();
-}
-
 export async function selectFullRecordsAsync({
     table,
     view,
@@ -33,11 +34,7 @@ export async function selectFullRecordsAsync({
     const root = typeof view === "string" ? table.getView(view) : table;
     const qResult = await root.selectRecordsAsync({ fields: table.fields });
 
-    const fieldMap = new Map<string, Field>();
-    for (const field of table.fields) {
-        fieldMap.set(normalizeRef(field.id), field);
-        fieldMap.set(normalizeRef(field.name), field);
-    }
+    const fieldMap = createReferenceIndex(table.fields);
 
     const wantedIds = Array.isArray(recordIds) && recordIds.length
         ? new Set(recordIds)
@@ -67,7 +64,7 @@ export async function selectFullRecordsAsync({
                     ref: string,
                     format?: "value" | "string" | "full"
                 ) {
-                    const field = fieldMap.get(normalizeRef(ref));
+                    const field = resolveReference(fieldMap, ref);
                     if (!field) return undefined;
 
                     const entry = data[field.name];
