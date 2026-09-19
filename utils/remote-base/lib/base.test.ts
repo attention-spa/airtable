@@ -15,6 +15,14 @@ const peopleTable: RemoteTableSchema = {
             name: 'Name',
             type: 'singleLineText',
         },
+        {
+            id: 'fldPersonTasks',
+            name: 'Tasks',
+            type: 'multipleRecordLinks',
+            options: {
+                linkedTableId: 'tblTasks',
+            },
+        },
     ],
     views: [{
         id: 'viwPeople',
@@ -58,8 +66,14 @@ function createFixture() {
                 records: [{
                     id: 'recPerson',
                     fields: stringFormat
-                        ? { fldPersonName: 'Ada' }
-                        : { fldPersonName: 'Ada' },
+                        ? {
+                            fldPersonName: 'Ada',
+                            fldPersonTasks: 'Write tests',
+                        }
+                        : {
+                            fldPersonName: 'Ada',
+                            fldPersonTasks: ['recTask'],
+                        },
                 }],
             };
         }
@@ -105,7 +119,14 @@ describe('remote-base fetchFullData', () => {
         const task = tasks.record('recTask')!;
         const assignees = task.fields.Assignees as unknown[];
 
-        expect(assignees[0]).toBe(person);
+        const assignee = assignees[0] as any;
+
+        expect(assignee.id).toBe('recPerson');
+        expect(assignee.record).toBe(person);
+        expect(Object.keys(assignee)).toEqual(['id']);
+        expect(
+            Object.getOwnPropertyDescriptor(assignee, 'record')?.enumerable
+        ).toBe(false);
         expect(task.field.values.fldassignees).toBe(assignees);
         expect(
             Object.getOwnPropertyDescriptor(
@@ -158,7 +179,9 @@ describe('remote-base fetchFullData', () => {
 
         await base.fetchFullData();
         expect(
-            (base.table.get('tasks')!.record('recTask')!.fields.Assignees as unknown[])[0]
+            (
+                (base.table.get('tasks')!.record('recTask')!.fields.Assignees as any[])[0]
+            ).record
         ).toBe(base.table.get('people')!.record('recPerson'));
 
         await base.fetchFullData({
@@ -195,6 +218,27 @@ describe('remote-base fetchFullData', () => {
         expect(request).not.toHaveBeenCalled();
     });
 
+    it('keeps fully walked data finite and serializable across reciprocal links', async () => {
+        const { base } = createFixture();
+
+        await base.fetchFullData();
+
+        const serialized = JSON.stringify(base);
+        const parsed = JSON.parse(serialized);
+
+        expect(serialized).toContain('"id":"recPerson"');
+        expect(serialized).toContain('"id":"recTask"');
+
+        const tasksTable = parsed.tables.find(
+            (table: { id: string }) => table.id === 'tblTasks'
+        );
+        const task = tasksTable.records.find(
+            (record: { id: string }) => record.id === 'recTask'
+        );
+
+        expect(task.fields.Assignees).toEqual([{ id: 'recPerson' }]);
+    });
+
     it('loads values as well when string format is requested with link following', async () => {
         const { base, request } = createFixture();
 
@@ -203,7 +247,7 @@ describe('remote-base fetchFullData', () => {
         const task = base.table.get('tasks')!.record('recTask')!;
         const person = base.table.get('people')!.record('recPerson')!;
 
-        expect((task.fields.Assignees as unknown[])[0]).toBe(person);
+        expect((task.fields.Assignees as any[])[0].record).toBe(person);
         expect(task.field.strings.fldassignees).toBe('Ada');
         expect(request).toHaveBeenCalledTimes(4);
     });
