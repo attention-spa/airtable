@@ -1,5 +1,11 @@
 import { createLinkedBase } from './base.ts';
-import { normalizeRef, parseAuth, parseConfig, parseConnectionArgs } from './config.ts';
+import {
+    normalizeRef,
+    parseAirtableRefs,
+    parseAuth,
+    parseConfig,
+    parseConnectionArgs,
+} from './config.ts';
 import { createRequest } from './request.ts';
 import type {
     DeferredRemoteTable,
@@ -7,6 +13,10 @@ import type {
     RemoteBaseCallable,
     RemoteBaseConfig,
     RemoteBaseHandle,
+    RemoteBaseInitBase,
+    RemoteBaseInitBaseOptions,
+    RemoteBaseInitOptions,
+    RemoteBaseInitResult,
     RemoteBaseSchema,
     RemoteBaseState,
     RemoteTable,
@@ -14,21 +24,37 @@ import type {
 } from './types.ts';
 
 type TablesMetadataResponse = { tables: RemoteTableSchema[] };
+type BasesMetadataResponse = {
+    bases: RemoteBaseSchema[];
+    offset?: string;
+};
+
+type NormalizedInitBase = {
+    id: string;
+    schema: boolean;
+    fullData: boolean;
+    records: string[];
+};
 
 export function createRemoteBase(): RemoteBaseCallable {
     const states = new Map<string, RemoteBaseState>();
     let auth: string | undefined;
     const request = createRequest(() => auth);
 
-    function link(state: RemoteBaseState): Promise<RemoteBase> {
+    function link(
+        state: RemoteBaseState,
+        knownSchema?: RemoteBaseSchema,
+    ): Promise<RemoteBase> {
         if (state.base) return Promise.resolve(state.base);
         if (state.linking) return state.linking;
 
         state.linking = (async () => {
             const [baseSchema, tableSchema] = await Promise.all([
-                request<RemoteBaseSchema>(
-                    `/meta/bases/${encodeURIComponent(state.baseId)}`
-                ),
+                knownSchema
+                    ? Promise.resolve(knownSchema)
+                    : request<RemoteBaseSchema>(
+                        `/meta/bases/${encodeURIComponent(state.baseId)}`
+                    ),
                 request<TablesMetadataResponse>(
                     `/meta/bases/${encodeURIComponent(state.baseId)}/tables`
                 ),
@@ -76,6 +102,7 @@ export function createRemoteBase(): RemoteBaseCallable {
         const target = Promise.resolve() as Promise<void>;
         const methods = new Set([
             'fetchFullRecords',
+            'fetchRecords',
             'deleteRecords',
             'upsertRecords',
             'field',
@@ -211,6 +238,185 @@ export function createRemoteBase(): RemoteBaseCallable {
         return state.base ?? state.handle!;
     }
 
+    async function listBases(): Promise<RemoteBaseSchema[]> {
+        const bases: RemoteBaseSchema[] = [];
+        let offset: string | undefined;
+
+        do {
+            const params = new URLSearchParams({ pageSize: '100' });
+            if (offset) params.set('offset', offset);
+
+            const page = await request<BasesMetadataResponse>(
+                `/meta/bases?${params}`
+            );
+
+            bases.push(...page.bases);
+            offset = page.offset;
+        } while (offset);
+
+        return bases;
+    }
+
+    function parseBaseId(value: string): string {
+        const id = parseAirtableRefs(value).id;
+        if (!id) {
+            throw new TypeError(
+                `Invalid Airtable base reference: ${value}`
+            );
+        }
+        return id;
+    }
+
+    function normalizeInitBase(
+        value: RemoteBaseInitBase,
+    ): NormalizedInitBase {
+        if (typeof value === 'string') {
+            const withSchema = value.endsWith('*');
+            const raw = withSchema ? value.slice(0, -1) : value;
+
+            return {
+                id: parseBaseId(raw),
+                schema: withSchema,
+                fullData: false,
+                records: [],
+            };
+        }
+
+        const option = value as RemoteBaseInitBaseOptions;
+        const fullData = Boolean(option.fullData || option.allRecords);
+        const records = [
+            ...new Set(
+                (option.records ?? [])
+                    .map(recordId => String(recordId).trim())
+                    .filter(Boolean)
+            ),
+        ];
+
+        return {
+            id: parseBaseId(option.id),
+            schema: fullData || records.length > 0
+                ? true
+                : option.schema ?? true,
+            fullData,
+            records,
+        };
+    }
+
+    function normalizeInitBases(
+        values: RemoteBaseInitBase[],
+    ): NormalizedInitBase[] {
+        const normalized = new Map<string, NormalizedInitBase>();
+
+        for (const value of values) {
+            const next = normalizeInitBase(value);
+            const key = normalizeRef(next.id);
+            const current = normalized.get(key);
+
+            if (!current) {
+                normalized.set(key, next);
+                continue;
+            }
+
+            current.schema ||= next.schema;
+            current.fullData ||= next.fullData;
+            current.records = [
+                ...new Set([...current.records, ...next.records]),
+            ];
+
+            if (current.fullData || current.records.length) {
+                current.schema = true;
+            }
+        }
+
+        return [...normalized.values()];
+    }
+
+    async function fetchSelectedRecords(
+        base: RemoteBase,
+        recordIds: string[],
+    ): Promise<void> {
+        const remaining = new Set(recordIds);
+
+        for (const table of base.tables) {
+            if (!remaining.size) break;
+
+            const records = await table.fetchRecords([...remaining]);
+
+            for (const record of records) {
+                remaining.delete(record.id);
+            }
+        }
+    }
+
+    async function initialize(
+        options: RemoteBaseInitOptions,
+    ): Promise<RemoteBaseInitResult> {
+        const nextAuth = parseAuth(options?.auth);
+
+        if (!nextAuth) {
+            throw new TypeError(
+                'remoteBase.init requires a valid Airtable PAT in auth.'
+            );
+        }
+
+        auth = nextAuth;
+        const selection = options.bases ?? 'all';
+
+        if (
+            selection === 'all' ||
+            selection === '*' ||
+            selection === 'all*' ||
+            selection === '**'
+        ) {
+            const bases = await listBases();
+
+            if (selection === 'all' || selection === '*') {
+                return bases;
+            }
+
+            const loaded: RemoteBase[] = [];
+
+            for (const baseSchema of bases) {
+                loaded.push(
+                    await link(getState(baseSchema.id), baseSchema)
+                );
+            }
+
+            return loaded;
+        }
+
+        if (!Array.isArray(selection)) {
+            throw new TypeError(
+                'remoteBase.init bases must be all, *, all*, **, or an array.'
+            );
+        }
+
+        const result: RemoteBaseInitResult = [];
+
+        for (const item of normalizeInitBases(selection)) {
+            if (!item.schema) {
+                result.push(
+                    await request<RemoteBaseSchema>(
+                        `/meta/bases/${encodeURIComponent(item.id)}`
+                    )
+                );
+                continue;
+            }
+
+            const base = await link(getState(item.id));
+
+            if (item.fullData) {
+                await base.fetchFullData();
+            } else if (item.records.length) {
+                await fetchSelectedRecords(base, item.records);
+            }
+
+            result.push(base);
+        }
+
+        return result;
+    }
+
     Object.defineProperty(connect, 'auth', {
         configurable: false,
         enumerable: true,
@@ -236,6 +442,13 @@ export function createRemoteBase(): RemoteBaseCallable {
         enumerable: true,
         get: () => configure,
         set: configure,
+    });
+
+    Object.defineProperty(connect, 'init', {
+        configurable: false,
+        enumerable: true,
+        writable: false,
+        value: initialize,
     });
 
     const proxy = new Proxy(connect, {
