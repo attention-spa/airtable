@@ -248,6 +248,121 @@ export function createRemoteTable(
         return fetchFormat(format, refresh);
     }
 
+    function normalizeRecordIds(recordIds: string[]): string[] {
+        const ids = [
+            ...new Set(
+                recordIds
+                    .map(recordId => String(recordId).trim())
+                    .filter(Boolean)
+            ),
+        ];
+
+        for (const id of ids) {
+            if (!/^rec\\w{14}$/i.test(id)) {
+                throw new TypeError(`Invalid Airtable record ID: ${id}`);
+            }
+        }
+
+        return ids;
+    }
+
+    function recordIdFormula(recordIds: string[]): string {
+        const clauses = recordIds.map(
+            recordId => `RECORD_ID()='${recordId}'`
+        );
+
+        return clauses.length === 1
+            ? clauses[0]
+            : `OR(${clauses.join(',')})`;
+    }
+
+    function mergePartialRead(
+        format: LoadedReadFormat,
+        records: RawRecord[],
+    ): RemoteRecord[] {
+        const byId = new Map(
+            cache.records.map(record => [record.id, record])
+        );
+        const merged: RemoteRecord[] = [];
+
+        for (const raw of records) {
+            const record = byId.get(raw.id) ?? createRecord(raw.id);
+
+            if (format === 'values') {
+                record.field.values = normalizeValueFields(raw.fields);
+            } else {
+                record.field.strings = normalizeStringFields(raw.fields);
+            }
+
+            refreshRecordName(record);
+            byId.set(record.id, record);
+            merged.push(record);
+        }
+
+        cache.records = [...byId.values()];
+        return merged;
+    }
+
+    async function fetchRecordFormat(
+        format: LoadedReadFormat,
+        recordIds: string[],
+    ): Promise<RemoteRecord[]> {
+        const found = new Map<string, RawRecord>();
+
+        for (const batch of chunk(recordIds, 20)) {
+            let offset: string | undefined;
+
+            do {
+                const params = new URLSearchParams({
+                    pageSize: '100',
+                    returnFieldsByFieldId: 'true',
+                    filterByFormula: recordIdFormula(batch),
+                });
+
+                if (format === 'strings') {
+                    params.set('cellFormat', 'string');
+                }
+
+                if (offset) params.set('offset', offset);
+
+                const page = await request<RecordsResponse>(
+                    `/${encodeURIComponent(baseId)}/${encodeURIComponent(schema.id)}?${params}`
+                );
+
+                for (const record of page.records) {
+                    found.set(record.id, record);
+                }
+
+                offset = page.offset;
+            } while (offset);
+        }
+
+        return mergePartialRead(format, [...found.values()]);
+    }
+
+    async function fetchRecords(
+        recordIds: string[],
+        { format = 'values' }: RemoteReadOptions = {},
+    ): Promise<RemoteRecord[]> {
+        const ids = normalizeRecordIds(recordIds);
+        if (!ids.length) return [];
+
+        if (format === 'both') {
+            await fetchRecordFormat('values', ids);
+            await fetchRecordFormat('strings', ids);
+        } else {
+            await fetchRecordFormat(format, ids);
+        }
+
+        const byId = new Map(
+            cache.records.map(record => [record.id, record])
+        );
+
+        return ids
+            .map(id => byId.get(id))
+            .filter((record): record is RemoteRecord => Boolean(record));
+    }
+
     function mergeValueCache(records: RemoteRecord[]): void {
         if (!cache.loaded.values && !cache.loaded.strings) return;
 
@@ -379,6 +494,7 @@ export function createRemoteTable(
     const table = {
         ...schema,
         fetchFullRecords,
+        fetchRecords,
         deleteRecords,
         upsertRecords,
         field: resolveField,
