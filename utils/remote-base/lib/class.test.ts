@@ -120,7 +120,7 @@ describe('remoteBase.init', () => {
         expect((bases[1] as RemoteBase).table.get(TABLE_ID)?.name).toBe('Tasks');
     });
 
-    it('forces schema loading when allRecords or selected records are requested', async () => {
+    it('forces schema loading when selected records are requested', async () => {
         const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
             const url = String(input);
 
@@ -158,6 +158,51 @@ describe('remoteBase.init', () => {
                 id: BASE_ID,
                 schema: false,
                 records: [RECORD_ID],
+            }],
+        });
+        const base = bases[0] as RemoteBase;
+
+        expect(base.table.get(TABLE_ID)?.record(RECORD_ID)?.name).toBe('Alpha');
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
+
+    it('ignores schema false when allRecords is true', async () => {
+        const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+            const url = String(input);
+
+            if (url.endsWith(`/meta/bases/${BASE_ID}`)) {
+                return jsonResponse({ id: BASE_ID, name: 'One' });
+            }
+
+            if (url.includes(`/meta/bases/${BASE_ID}/tables`)) {
+                return jsonResponse({ tables: [tableSchema] });
+            }
+
+            if (url.includes(`/${BASE_ID}/${TABLE_ID}?`)) {
+                expect(url).not.toContain('filterByFormula=');
+
+                return jsonResponse({
+                    records: [{
+                        id: RECORD_ID,
+                        fields: {
+                            fldName000000001: 'Alpha',
+                        },
+                    }],
+                });
+            }
+
+            throw new Error(`Unexpected request: ${url}`);
+        });
+
+        vi.stubGlobal('fetch', fetchMock);
+
+        const remoteBase = createRemoteBase();
+        const bases = await remoteBase.init({
+            auth: AUTH,
+            bases: [{
+                id: BASE_ID,
+                allRecords: true,
+                schema: false,
             }],
         });
         const base = bases[0] as RemoteBase;
