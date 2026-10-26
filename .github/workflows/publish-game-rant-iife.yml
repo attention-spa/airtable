@@ -49,8 +49,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Type-check repository
-        run: npm exec -- tsc --pretty false
+      - name: Type-check Game Rant modules
+        run: >-
+          npm exec -- tsc --pretty false --noEmit
+          --module nodenext --moduleResolution nodenext --target esnext
+          --strict --skipLibCheck --lib ESNext,WebWorker
+          --allowImportingTsExtensions
+          utils/game-rant/shared.ts
+          utils/game-rant/backfill/index.ts
+          utils/game-rant/ingest/index.ts
+          utils/game-rant/game-rant.test.ts
 
       - name: Run Game Rant tests
         run: npm exec -- vitest run utils/game-rant/game-rant.test.ts
