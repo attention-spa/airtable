@@ -1,0 +1,163 @@
+name: Verify and publish Game Rant IIFE bundles
+
+on:
+  pull_request:
+    paths:
+      - "utils/game-rant/**"
+      - "utils/core/**"
+      - "utils/index.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "tsup.config.mjs"
+      - ".github/workflows/publish-game-rant-iife.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "utils/game-rant/**"
+      - "utils/core/**"
+      - "utils/index.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "tsup.config.mjs"
+      - ".github/workflows/publish-game-rant-iife.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: game-rant-iife-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check Game Rant modules
+        run: >-
+          npm exec -- tsc --pretty false --noEmit
+          --module nodenext --moduleResolution nodenext --target esnext
+          --strict --skipLibCheck --lib ESNext,WebWorker
+          --allowImportingTsExtensions
+          utils/game-rant/shared.ts
+          utils/game-rant/backfill/index.ts
+          utils/game-rant/ingest/index.ts
+          utils/game-rant/game-rant.test.ts
+
+      - name: Run Game Rant tests
+        run: npm exec -- vitest run utils/game-rant/game-rant.test.ts
+
+      - name: Prepare IIFE artifact directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/game-rant-iife"
+          mkdir -p "$RUNNER_TEMP/game-rant-iife"
+
+      - name: Build backfill IIFE
+        run: npm run bundle -- utils/game-rant/backfill/index.ts --format iife --global-name gameRantBackfillModule
+
+      - name: Capture backfill IIFE
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t js_files < <(find dist -maxdepth 2 -type f -name '*.js' -print | sort)
+          printf 'Generated JavaScript files:\n%s\n' "${js_files[*]}"
+          if (( ${#js_files[@]} != 1 )); then
+            echo "Expected exactly one JavaScript bundle, found ${#js_files[@]}." >&2
+            exit 1
+          fi
+          cp "${js_files[0]}" "$RUNNER_TEMP/game-rant-iife/game-rant-backfill.js"
+
+      - name: Build ingestion IIFE
+        run: npm run bundle -- utils/game-rant/ingest/index.ts --format iife --global-name gameRantIngestModule
+
+      - name: Capture ingestion IIFE
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t js_files < <(find dist -maxdepth 2 -type f -name '*.js' -print | sort)
+          printf 'Generated JavaScript files:\n%s\n' "${js_files[*]}"
+          if (( ${#js_files[@]} != 1 )); then
+            echo "Expected exactly one JavaScript bundle, found ${#js_files[@]}." >&2
+            exit 1
+          fi
+          cp "${js_files[0]}" "$RUNNER_TEMP/game-rant-iife/game-rant-ingest.js"
+
+      - name: Smoke-test Function loading
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARTIFACTS="$RUNNER_TEMP/game-rant-iife" node <<'NODE'
+          const { readFileSync } = require("node:fs");
+          const { join } = require("node:path");
+
+          const cases = [
+            ["game-rant-backfill.js", "gameRantBackfillModule", "backfillGameRantLinks"],
+            ["game-rant-ingest.js", "gameRantIngestModule", "ingestGameRantHtmlAttachments"],
+          ];
+
+          for (const [filename, globalName, exportName] of cases) {
+            const source = readFileSync(join(process.env.ARTIFACTS, filename), "utf8");
+            const module = new Function(`${source}\nreturn ${globalName};`)();
+            if (typeof module?.[exportName] !== "function") {
+              throw new Error(`${filename} does not expose ${exportName}.`);
+            }
+          }
+          NODE
+
+      - name: Publish generated branch
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifacts="$RUNNER_TEMP/game-rant-iife"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git ls-remote --exit-code --heads origin iife >/dev/null 2>&1; then
+            git fetch origin iife:iife
+            git switch iife
+            git rm -rf .
+          else
+            git switch --orphan iife
+            git rm -rf . || true
+          fi
+
+          cp "$artifacts/game-rant-backfill.js" ./game-rant-backfill.js
+          cp "$artifacts/game-rant-ingest.js" ./game-rant-ingest.js
+          cat > README.md <<'EOF'
+          # Generated Airtable IIFE bundles
+
+          This branch is generated from `main`. Do not edit it manually.
+
+          - `game-rant-backfill.js` exposes `gameRantBackfillModule`.
+          - `game-rant-ingest.js` exposes `gameRantIngestModule`.
+          EOF
+
+          git add README.md game-rant-backfill.js game-rant-ingest.js
+
+          if git diff --cached --quiet; then
+            echo "Generated bundles are unchanged."
+            exit 0
+          fi
+
+          git commit -m "build: publish Game Rant IIFE bundles"
+          git push origin iife
