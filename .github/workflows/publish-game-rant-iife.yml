@@ -1,12 +1,22 @@
-name: Publish Game Rant IIFE bundles
+name: Verify and publish Game Rant IIFE bundles
 
 on:
+  pull_request:
+    paths:
+      - "utils/game-rant/**"
+      - "utils/core/**"
+      - "utils/index.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "tsup.config.mjs"
+      - ".github/workflows/publish-game-rant-iife.yml"
   push:
     branches:
       - main
     paths:
       - "utils/game-rant/**"
       - "utils/core/**"
+      - "utils/index.ts"
       - "package.json"
       - "package-lock.json"
       - "tsup.config.mjs"
@@ -17,11 +27,11 @@ permissions:
   contents: write
 
 concurrency:
-  group: publish-game-rant-iife
+  group: game-rant-iife-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  publish:
+  verify-and-publish:
     runs-on: ubuntu-latest
 
     steps:
@@ -39,7 +49,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build IIFE bundles
+      - name: Type-check repository
+        run: npm exec -- tsc --pretty false
+
+      - name: Run Game Rant tests
+        run: npm exec -- vitest run utils/game-rant/game-rant.test.ts
+
+      - name: Build and smoke-test IIFE bundles
         shell: bash
         run: |
           set -euo pipefail
@@ -53,7 +69,26 @@ jobs:
           npm run bundle -- utils/game-rant/ingest/index.ts --format iife --global-name gameRantIngestModule
           cp dist/bundle.js "$artifacts/game-rant-ingest.js"
 
+          ARTIFACTS="$artifacts" node <<'NODE'
+          const { readFileSync } = require("node:fs");
+          const { join } = require("node:path");
+
+          const cases = [
+            ["game-rant-backfill.js", "gameRantBackfillModule", "backfillGameRantLinks"],
+            ["game-rant-ingest.js", "gameRantIngestModule", "ingestGameRantHtmlAttachments"],
+          ];
+
+          for (const [filename, globalName, exportName] of cases) {
+            const source = readFileSync(join(process.env.ARTIFACTS, filename), "utf8");
+            const module = new Function(`${source}\nreturn ${globalName};`)();
+            if (typeof module?.[exportName] !== "function") {
+              throw new Error(`${filename} does not expose ${exportName}.`);
+            }
+          }
+          NODE
+
       - name: Publish generated branch
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
