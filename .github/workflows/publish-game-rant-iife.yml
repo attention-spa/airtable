@@ -1,0 +1,93 @@
+name: Publish Game Rant IIFE bundles
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "utils/game-rant/**"
+      - "utils/core/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsup.config.mjs"
+      - ".github/workflows/publish-game-rant-iife.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-game-rant-iife
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build IIFE bundles
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifacts="$RUNNER_TEMP/game-rant-iife"
+          rm -rf "$artifacts"
+          mkdir -p "$artifacts"
+
+          npm run bundle -- utils/game-rant/backfill/index.ts --format iife --global-name gameRantBackfillModule
+          cp dist/bundle.js "$artifacts/game-rant-backfill.js"
+
+          npm run bundle -- utils/game-rant/ingest/index.ts --format iife --global-name gameRantIngestModule
+          cp dist/bundle.js "$artifacts/game-rant-ingest.js"
+
+      - name: Publish generated branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifacts="$RUNNER_TEMP/game-rant-iife"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git ls-remote --exit-code --heads origin iife >/dev/null 2>&1; then
+            git fetch origin iife:iife
+            git switch iife
+            git rm -rf .
+          else
+            git switch --orphan iife
+            git rm -rf . || true
+          fi
+
+          cp "$artifacts/game-rant-backfill.js" ./game-rant-backfill.js
+          cp "$artifacts/game-rant-ingest.js" ./game-rant-ingest.js
+          cat > README.md <<'EOF'
+          # Generated Airtable IIFE bundles
+
+          This branch is generated from `main`. Do not edit it manually.
+
+          - `game-rant-backfill.js` exposes `gameRantBackfillModule`.
+          - `game-rant-ingest.js` exposes `gameRantIngestModule`.
+          EOF
+
+          git add README.md game-rant-backfill.js game-rant-ingest.js
+
+          if git diff --cached --quiet; then
+            echo "Generated bundles are unchanged."
+            exit 0
+          fi
+
+          git commit -m "build: publish Game Rant IIFE bundles"
+          git push origin iife
