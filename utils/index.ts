@@ -11,3 +11,29 @@ export {
   resolveReference,
 } from "./core/index.ts";
 export type { AirtableNamedReference } from "./core/index.ts";
+export {
+  backfillGameRantLinks,
+  canonicalGameRantUrl,
+  extractArticleLinks,
+  gameRantHtmlFilename,
+  normTitle,
+  titleSimilarity,
+} from "./game-rant/backfill/index.ts";
+export type {
+  BackfillGameRantLinksConfig,
+  BackfillGameRantLinksResult,
+} from "./game-rant/backfill/index.ts";
+export {
+  extractArticleBodyHtml,
+  extractGameRantMetadata,
+  extractMetaTags,
+  extractValnetGlobalVars,
+  findGameRantHtmlAttachment,
+  htmlToMarkdown,
+  ingestGameRantHtmlAttachments,
+  serializeMetadataForField,
+} from "./game-rant/ingest/index.ts";
+export type {
+  IngestGameRantHtmlConfig,
+  IngestGameRantHtmlResult,
+} from "./game-rant/ingest/index.ts";
