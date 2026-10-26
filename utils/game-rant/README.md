@@ -149,4 +149,4 @@ npm run bundle -- utils/game-rant/backfill/index.ts --format iife --global-name 
 npm run bundle -- utils/game-rant/ingest/index.ts --format iife --global-name gameRantIngestModule
 ```
 
-Each command writes `dist/bundle.js`; the publish workflow renames those artifacts on the `iife` branch.
+The exact local IIFE filename is determined by `tsup`; the publish workflow validates that exactly one JavaScript bundle was produced and renames it to the stable `iife`-branch filenames above.
