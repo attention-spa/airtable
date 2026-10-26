@@ -77,10 +77,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "dist contents after backfill build:"
-          find dist -maxdepth 2 -type f -print | sort
-          test -f dist/bundle.js
-          cp dist/bundle.js "$RUNNER_TEMP/game-rant-iife/game-rant-backfill.js"
+          mapfile -t js_files < <(find dist -maxdepth 2 -type f -name '*.js' -print | sort)
+          printf 'Generated JavaScript files:\n%s\n' "${js_files[*]}"
+          if (( ${#js_files[@]} != 1 )); then
+            echo "Expected exactly one JavaScript bundle, found ${#js_files[@]}." >&2
+            exit 1
+          fi
+          cp "${js_files[0]}" "$RUNNER_TEMP/game-rant-iife/game-rant-backfill.js"
 
       - name: Build ingestion IIFE
         run: npm run bundle -- utils/game-rant/ingest/index.ts --format iife --global-name gameRantIngestModule
@@ -89,10 +92,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "dist contents after ingestion build:"
-          find dist -maxdepth 2 -type f -print | sort
-          test -f dist/bundle.js
-          cp dist/bundle.js "$RUNNER_TEMP/game-rant-iife/game-rant-ingest.js"
+          mapfile -t js_files < <(find dist -maxdepth 2 -type f -name '*.js' -print | sort)
+          printf 'Generated JavaScript files:\n%s\n' "${js_files[*]}"
+          if (( ${#js_files[@]} != 1 )); then
+            echo "Expected exactly one JavaScript bundle, found ${#js_files[@]}." >&2
+            exit 1
+          fi
+          cp "${js_files[0]}" "$RUNNER_TEMP/game-rant-iife/game-rant-ingest.js"
 
       - name: Smoke-test Function loading
         shell: bash
