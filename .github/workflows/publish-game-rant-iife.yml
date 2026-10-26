@@ -63,21 +63,42 @@ jobs:
       - name: Run Game Rant tests
         run: npm exec -- vitest run utils/game-rant/game-rant.test.ts
 
-      - name: Build and smoke-test IIFE bundles
+      - name: Prepare IIFE artifact directory
         shell: bash
         run: |
           set -euo pipefail
-          artifacts="$RUNNER_TEMP/game-rant-iife"
-          rm -rf "$artifacts"
-          mkdir -p "$artifacts"
+          rm -rf "$RUNNER_TEMP/game-rant-iife"
+          mkdir -p "$RUNNER_TEMP/game-rant-iife"
 
-          npm run bundle -- utils/game-rant/backfill/index.ts --format iife --global-name gameRantBackfillModule
-          cp dist/bundle.js "$artifacts/game-rant-backfill.js"
+      - name: Build backfill IIFE
+        run: npm run bundle -- utils/game-rant/backfill/index.ts --format iife --global-name gameRantBackfillModule
 
-          npm run bundle -- utils/game-rant/ingest/index.ts --format iife --global-name gameRantIngestModule
-          cp dist/bundle.js "$artifacts/game-rant-ingest.js"
+      - name: Capture backfill IIFE
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "dist contents after backfill build:"
+          find dist -maxdepth 2 -type f -print | sort
+          test -f dist/bundle.js
+          cp dist/bundle.js "$RUNNER_TEMP/game-rant-iife/game-rant-backfill.js"
 
-          ARTIFACTS="$artifacts" node <<'NODE'
+      - name: Build ingestion IIFE
+        run: npm run bundle -- utils/game-rant/ingest/index.ts --format iife --global-name gameRantIngestModule
+
+      - name: Capture ingestion IIFE
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "dist contents after ingestion build:"
+          find dist -maxdepth 2 -type f -print | sort
+          test -f dist/bundle.js
+          cp dist/bundle.js "$RUNNER_TEMP/game-rant-iife/game-rant-ingest.js"
+
+      - name: Smoke-test Function loading
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARTIFACTS="$RUNNER_TEMP/game-rant-iife" node <<'NODE'
           const { readFileSync } = require("node:fs");
           const { join } = require("node:path");
 
